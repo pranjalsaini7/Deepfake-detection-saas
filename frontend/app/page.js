@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
+import Link from "next/link";
 
 export default function Home() {
+  const { user, session, loading: authLoading, signOut } = useAuth();
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -10,7 +13,7 @@ export default function Home() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!file) return;
+    if (!file || !session) return;
 
     setLoading(true);
     setResult(null);
@@ -22,6 +25,9 @@ export default function Home() {
     try {
       const res = await fetch("http://localhost:8000/detect", {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: formData,
       });
 
@@ -39,9 +45,24 @@ export default function Home() {
     }
   };
 
+  if (authLoading) {
+    return (
+      <main style={{ padding: "2rem", fontFamily: "sans-serif" }}>
+        <p>Loading…</p>
+      </main>
+    );
+  }
+
   return (
     <main style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-      <h1>Deepfake Detector</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1>Deepfake Detector</h1>
+        <div>
+          <span style={{ marginRight: "1rem" }}>{user?.email}</span>
+          <Link href="/dashboard" style={{ marginRight: "1rem" }}>Dashboard</Link>
+          <button id="logout-btn" onClick={signOut}>Log Out</button>
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit}>
         <input

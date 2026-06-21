@@ -5,3 +5,6 @@ transformers
 torch
 pillow
 accelerate
+python-dotenv
+supabase
+httpx
