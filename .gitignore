@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+backend/venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# HuggingFace cache (large model files)
+*.bin
+*.safetensors
+
+# Node (for future frontend)
+node_modules/
+frontend/.next/
+frontend/out/
+
+# Environment variables
+.env
+.env.local
