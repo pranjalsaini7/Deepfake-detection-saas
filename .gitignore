@@ -32,3 +32,8 @@ frontend/out/
 
 # Test images
 pexels-*.jpg
+test_heatmap_output.png
+
+# Downloaded models (MediaPipe etc.)
+backend/models/
+*.tflite

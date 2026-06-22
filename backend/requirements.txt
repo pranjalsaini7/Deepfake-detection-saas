@@ -8,3 +8,5 @@ accelerate
 python-dotenv
 supabase
 httpx
+mediapipe
+opencv-python-headless

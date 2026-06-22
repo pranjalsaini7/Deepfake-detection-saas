@@ -7,9 +7,22 @@ import Link from "next/link";
 export default function Home() {
   const { user, session, loading: authLoading, signOut } = useAuth();
   const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const handleFileChange = (e) => {
+    const selected = e.target.files[0];
+    setFile(selected);
+    if (selected) {
+      setPreview(URL.createObjectURL(selected));
+    } else {
+      setPreview(null);
+    }
+    setResult(null);
+    setError(null);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -69,21 +82,80 @@ export default function Home() {
           id="file-input"
           type="file"
           accept="image/*"
-          onChange={(e) => setFile(e.target.files[0])}
+          onChange={handleFileChange}
         />
         <button id="check-btn" type="submit" disabled={!file || loading}>
-          {loading ? "Checking…" : "Check"}
+          {loading ? "Analyzing…" : "Check"}
         </button>
       </form>
 
       {result && (
-        <div id="result" style={{ marginTop: "1rem" }}>
-          <p>
-            <strong>Label:</strong> {result.label}
-          </p>
-          <p>
-            <strong>Confidence:</strong> {(result.confidence * 100).toFixed(2)}%
-          </p>
+        <div id="result" style={{ marginTop: "1.5rem" }}>
+          <div style={{ marginBottom: "1rem" }}>
+            <p>
+              <strong>Verdict:</strong>{" "}
+              <span
+                style={{
+                  color: result.label === "Deepfake" ? "#c0392b" : "#27ae60",
+                  fontWeight: "bold",
+                  fontSize: "1.2rem",
+                }}
+              >
+                {result.label}
+              </span>
+            </p>
+            <p>
+              <strong>Confidence:</strong> {(result.confidence * 100).toFixed(2)}%
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "1.5rem",
+              flexWrap: "wrap",
+              alignItems: "flex-start",
+            }}
+          >
+            {/* Original image */}
+            {preview && (
+              <div>
+                <h3 style={{ marginBottom: "0.5rem" }}>Original</h3>
+                <img
+                  id="original-image"
+                  src={preview}
+                  alt="Uploaded image"
+                  style={{
+                    maxWidth: "400px",
+                    maxHeight: "400px",
+                    border: "2px solid #ddd",
+                    borderRadius: "8px",
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Heatmap overlay */}
+            {result.heatmap && (
+              <div>
+                <h3 style={{ marginBottom: "0.5rem" }}>Attention Heatmap</h3>
+                <img
+                  id="heatmap-image"
+                  src={`data:image/jpeg;base64,${result.heatmap}`}
+                  alt="Attention heatmap overlay"
+                  style={{
+                    maxWidth: "400px",
+                    maxHeight: "400px",
+                    border: "2px solid #ddd",
+                    borderRadius: "8px",
+                  }}
+                />
+                <p style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.25rem" }}>
+                  Warm areas = regions the model focused on
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
