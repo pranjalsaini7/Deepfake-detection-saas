@@ -1,4 +1,4 @@
-"""Test heatmap: sign in, detect with heatmap, save overlay to disk."""
+"""Test the upgraded EfficientNet + Grad-CAM pipeline."""
 
 import httpx
 import os
@@ -22,14 +22,14 @@ assert resp.status_code == 200, f"Sign-in failed: {resp.text}"
 token = resp.json()["access_token"]
 print("Got token.")
 
-# Run detection with heatmap
-print("\n=== Detection with heatmap ===")
+# Run detection
+print("\n=== Detection (EfficientNet + TTA + Multi-crop + Grad-CAM) ===")
 with open(r"..\pexels-manishjangid-18938081.jpg", "rb") as f:
     resp2 = httpx.post(
         "http://localhost:8000/detect",
         headers={"Authorization": f"Bearer {token}"},
         files={"file": ("test.jpg", f, "image/jpeg")},
-        timeout=120,
+        timeout=300,  # TTA + multi-crop takes longer
     )
 
 print(f"Status: {resp2.status_code}")
@@ -39,14 +39,16 @@ if resp2.status_code != 200:
 
 data = resp2.json()
 print(f"Label: {data['label']}")
-print(f"Confidence: {data['confidence']}")
-print(f"Heatmap present: {'heatmap' in data and len(data['heatmap']) > 100}")
+print(f"Confidence: {data['confidence']}%")
+print(f"Low agreement: {data['low_agreement']}")
+print(f"Warning: {data['warning']}")
+print(f"Heatmap present: {'heatmap' in data and len(data.get('heatmap', '')) > 100}")
 print(f"Heatmap size: {len(data.get('heatmap', ''))} chars")
 
-# Save heatmap to file for inspection
+# Save heatmap
 if data.get("heatmap"):
     heatmap_bytes = base64.b64decode(data["heatmap"])
-    out_path = r"..\test_heatmap_output.png"
+    out_path = r"..\test_gradcam_output.png"
     with open(out_path, "wb") as f:
         f.write(heatmap_bytes)
     print(f"Heatmap saved to: {out_path}")

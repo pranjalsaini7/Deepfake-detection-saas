@@ -30,10 +30,12 @@ frontend/out/
 .env.local
 .env*.local
 
-# Test images
+# Test images and outputs
 pexels-*.jpg
 test_heatmap_output.png
+test_gradcam_output.png
 
 # Downloaded models (MediaPipe etc.)
 backend/models/
 *.tflite
+*.task

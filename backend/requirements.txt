@@ -1,8 +1,8 @@
 fastapi
 uvicorn[standard]
 python-multipart
-transformers
 torch
+torchvision
 pillow
 accelerate
 python-dotenv
@@ -10,3 +10,5 @@ supabase
 httpx
 mediapipe
 opencv-python-headless
+timm
+grad-cam

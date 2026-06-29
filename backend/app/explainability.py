@@ -1,117 +1,198 @@
 """
-ViT Attention Rollout — visual explainability for ViT-based classifiers.
+Grad-CAM explainability for EfficientNet-B4.
 
-Extracts attention weights from all transformer layers, computes the
-attention rollout (recursive matrix multiplication with residual
-connections), and generates a heatmap overlay on the input image.
+Uses pytorch-grad-cam to generate a heatmap on the model's last conv block,
+applies a facial zone mask from MediaPipe FaceMesh landmarks, and
+composites the result back onto the original full image.
 """
 
 import numpy as np
-import torch
 import cv2
 from PIL import Image
 from io import BytesIO
 import base64
+import torch
+from torchvision import transforms
+from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.image import show_cam_on_image
+
+# ── Preprocessing for Grad-CAM input ────────────────────────────────
+_MEAN = [0.485, 0.456, 0.406]
+_STD = [0.229, 0.224, 0.225]
+_SIZE = 380
+
+_gradcam_transform = transforms.Compose([
+    transforms.Resize((_SIZE, _SIZE)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=_MEAN, std=_STD),
+])
+
+# Landmark indices for facial zone mask
+_EYE_LANDMARKS = [33, 133, 362, 263, 159, 145, 386, 374]
+_NOSE_LANDMARKS = [6, 197, 195, 5, 4, 1, 2, 98, 327]
+_MOUTH_LANDMARKS = [61, 291, 0, 17, 78, 308, 13, 14]
+_CHEEK_LANDMARKS = [123, 352, 234, 454, 93, 323]
+_FOREHEAD_LANDMARKS = [10, 338, 297, 332, 284, 251, 389, 356,
+                       67, 103, 54, 21, 162, 127]
+_JAW_LANDMARKS = [172, 136, 150, 149, 176, 148, 152,
+                  377, 400, 378, 379, 365, 397]
 
 
-def compute_attention_rollout(attentions, discard_ratio=0.0):
+def _build_face_mask(face_image: Image.Image) -> np.ndarray:
     """
-    Compute attention rollout from a list of attention matrices.
-
-    Args:
-        attentions: list of tensors, each (batch, num_heads, seq_len, seq_len)
-        discard_ratio: fraction of lowest attention weights to zero out per layer.
-
-    Returns:
-        rollout: numpy array of shape (seq_len,) — attention from CLS to each patch.
+    Use MediaPipe FaceMesh to detect landmarks and build a binary mask
+    covering key facial zones (eyes, nose, mouth, cheeks, forehead, jaw).
+    Returns a float32 mask of shape (H, W) with values 0 or 1.
+    Falls back to an all-ones mask if no face is detected.
     """
-    # Average across heads for each layer
-    result = None
+    import mediapipe as mp
+    from mediapipe.tasks import python as mp_python
+    from mediapipe.tasks.python import vision
+    import os
+    import urllib.request
 
-    for attention in attentions:
-        # attention shape: (batch, heads, seq_len, seq_len)
-        att_mat = attention.detach().cpu().numpy()
-        att_mat = att_mat.squeeze(0)           # (heads, seq_len, seq_len)
-        att_mat = np.mean(att_mat, axis=0)     # (seq_len, seq_len) — average over heads
+    img_array = np.array(face_image)
+    h, w = img_array.shape[:2]
 
-        # Optional: discard low-attention values
-        if discard_ratio > 0:
-            flat = att_mat.flatten()
-            threshold = np.quantile(flat, discard_ratio)
-            att_mat[att_mat < threshold] = 0
+    # Download face landmarker model if needed
+    model_dir = os.path.join(os.path.dirname(__file__), "..", "models")
+    model_path = os.path.join(model_dir, "face_landmarker.task")
+    model_url = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 
-        # Add residual connection (identity matrix) and re-normalize rows
-        residual = np.eye(att_mat.shape[0])
-        att_mat = 0.5 * att_mat + 0.5 * residual
-        att_mat = att_mat / att_mat.sum(axis=-1, keepdims=True)
+    if not os.path.exists(model_path):
+        os.makedirs(model_dir, exist_ok=True)
+        print("[HEATMAP] Downloading FaceMesh model...")
+        urllib.request.urlretrieve(model_url, model_path)
+        print(f"[HEATMAP] Model saved to {model_path}")
 
-        if result is None:
-            result = att_mat
-        else:
-            result = result @ att_mat
+    # Create face landmarker
+    base_options = mp_python.BaseOptions(model_asset_path=model_path)
+    options = vision.FaceLandmarkerOptions(
+        base_options=base_options,
+        num_faces=1,
+    )
+    landmarker = vision.FaceLandmarker.create_from_options(options)
 
-    # Extract CLS token's attention to all other tokens
-    # CLS is at index 0; patch tokens start at index 1
-    cls_attention = result[0, 1:]  # exclude CLS-to-CLS
+    # Detect landmarks
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_array)
+    result = landmarker.detect(mp_image)
 
-    return cls_attention
+    if not result.face_landmarks:
+        print("[HEATMAP] No face landmarks found, using full mask.")
+        return np.ones((h, w), dtype=np.float32)
+
+    landmarks = result.face_landmarks[0]
+
+    # Build mask from landmark groups
+    mask = np.zeros((h, w), dtype=np.uint8)
+
+    all_groups = [
+        _EYE_LANDMARKS,
+        _NOSE_LANDMARKS,
+        _MOUTH_LANDMARKS,
+        _CHEEK_LANDMARKS,
+        _FOREHEAD_LANDMARKS,
+        _JAW_LANDMARKS,
+    ]
+
+    for group in all_groups:
+        points = []
+        for idx in group:
+            if idx < len(landmarks):
+                lm = landmarks[idx]
+                px = int(lm.x * w)
+                py = int(lm.y * h)
+                points.append([px, py])
+        if len(points) >= 3:
+            hull = cv2.convexHull(np.array(points, dtype=np.int32))
+            cv2.fillConvexPoly(mask, hull, 255)
+
+    # Dilate mask to cover gaps between regions
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25))
+    mask = cv2.dilate(mask, kernel, iterations=2)
+
+    # Apply Gaussian blur for smooth edges
+    mask = cv2.GaussianBlur(mask, (31, 31), 0)
+
+    return mask.astype(np.float32) / 255.0
 
 
 def generate_heatmap_overlay(
-    image: Image.Image,
-    attentions: list,
-    patch_grid_size: int = 14,
-    alpha: float = 0.5,
-    colormap: int = cv2.COLORMAP_JET,
+    face_image: Image.Image,
+    original_image: Image.Image,
+    bbox: dict,
+    model,
+    device: str,
 ) -> str:
     """
-    Generate a heatmap overlay from ViT attention weights.
+    Generate a Grad-CAM heatmap overlay for the face region,
+    masked to facial zones, composited onto the original image.
 
     Args:
-        image: the input PIL image (cropped face).
-        attentions: list of attention tensors from the model.
-        patch_grid_size: number of patches per side (ViT-base = 14x14 = 196 patches).
-        alpha: transparency of the heatmap overlay.
-        colormap: OpenCV colormap to use.
+        face_image: cropped face PIL image.
+        original_image: full original PIL image.
+        bbox: dict with x, y, w, h of face crop in original image.
+        model: the EfficientNet model.
+        device: "cuda" or "cpu".
 
     Returns:
-        Base64-encoded PNG string of the heatmap overlay image.
+        Base64-encoded PNG string of the heatmap overlay.
     """
-    # Compute attention rollout
-    cls_attention = compute_attention_rollout(attentions, discard_ratio=0.1)
+    face_rgb = face_image.convert("RGB")
 
-    # Reshape to 2D grid
-    grid_size = int(np.sqrt(len(cls_attention)))
-    if grid_size * grid_size != len(cls_attention):
-        grid_size = patch_grid_size
+    # Prepare input tensor
+    input_tensor = _gradcam_transform(face_rgb).unsqueeze(0).to(device)
 
-    attention_map = cls_attention[:grid_size * grid_size].reshape(grid_size, grid_size)
+    # Prepare normalized RGB image for overlay (0-1 float)
+    face_resized = face_rgb.resize((_SIZE, _SIZE), Image.LANCZOS)
+    rgb_img = np.array(face_resized).astype(np.float32) / 255.0
 
-    # Normalize to [0, 255]
-    attention_map = (attention_map - attention_map.min()) / (attention_map.max() - attention_map.min() + 1e-8)
-    attention_map = (attention_map * 255).astype(np.uint8)
+    # Run Grad-CAM on last EfficientNet block
+    target_layer = model.blocks[-1]
+    cam = GradCAM(model=model, target_layers=[target_layer])
+    grayscale_cam = cam(input_tensor=input_tensor)[0]
 
-    # Resize to match input image dimensions
-    img_array = np.array(image)
-    h, w = img_array.shape[:2]
-    attention_resized = cv2.resize(attention_map, (w, h), interpolation=cv2.INTER_CUBIC)
+    # Build facial zone mask and apply
+    face_mask = _build_face_mask(face_resized)
 
-    # Apply colormap
-    heatmap = cv2.applyColorMap(attention_resized, colormap)
-    heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+    # Resize mask to match cam output
+    if face_mask.shape != grayscale_cam.shape:
+        face_mask = cv2.resize(face_mask, (grayscale_cam.shape[1], grayscale_cam.shape[0]))
 
-    # Blend heatmap with original image
-    overlay = (alpha * heatmap + (1 - alpha) * img_array).astype(np.uint8)
+    # Mask the Grad-CAM output
+    masked_cam = grayscale_cam * face_mask
 
-    # Resize overlay to max 512px on longest side (keeps response size sane)
-    overlay_image = Image.fromarray(overlay)
-    max_side = 512
-    if max(overlay_image.size) > max_side:
-        overlay_image.thumbnail((max_side, max_side), Image.LANCZOS)
+    # Re-normalize after masking
+    if masked_cam.max() > 0:
+        masked_cam = masked_cam / masked_cam.max()
 
-    # Encode to base64 JPEG (much smaller than PNG)
+    # Generate visualization
+    visualization = show_cam_on_image(rgb_img, masked_cam, use_rgb=True)
+
+    # Paste heatmap back onto original image at face coordinates
+    orig_array = np.array(original_image.convert("RGB"))
+    viz_pil = Image.fromarray(visualization)
+
+    # Resize visualization to match original crop size
+    crop_w = bbox["w"]
+    crop_h = bbox["h"]
+    viz_resized = viz_pil.resize((crop_w, crop_h), Image.LANCZOS)
+
+    # Composite onto original
+    result_image = Image.fromarray(orig_array.copy())
+    result_image.paste(viz_resized, (bbox["x"], bbox["y"]))
+
+    # Resize output to max 800px for reasonable response size
+    max_side = 800
+    if max(result_image.size) > max_side:
+        result_image.thumbnail((max_side, max_side), Image.LANCZOS)
+
+    # Encode to base64 PNG
     buffer = BytesIO()
-    overlay_image.save(buffer, format="JPEG", quality=85)
+    result_image.save(buffer, format="PNG", optimize=True)
     b64_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    # Clean up Grad-CAM
+    del cam
 
     return b64_str

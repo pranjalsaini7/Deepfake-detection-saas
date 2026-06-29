@@ -3,7 +3,7 @@ Deepfake Detection API — FastAPI application.
 
 Endpoints:
     POST /detect — accepts an image file, returns deepfake classification
-                   with a base64-encoded attention heatmap overlay.
+                   with Grad-CAM heatmap overlay, TTA + multi-crop scoring.
 """
 
 import sys
@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import io
 
-from app.model import classify_with_attention
+from app.model import classify_image, get_model, get_device
 from app.face_detection import detect_and_crop_face
 from app.explainability import generate_heatmap_overlay
 from app.supabase_client import get_user_from_token, insert_scan
@@ -32,7 +32,7 @@ from app.supabase_client import get_user_from_token, insert_scan
 app = FastAPI(
     title="Deepfake Detection API",
     description="Upload a face image to detect whether it is real or AI-generated.",
-    version="0.3.0",
+    version="0.4.0",
 )
 
 # ── CORS (allow Next.js dev server) ─────────────────────────────────
@@ -60,10 +60,9 @@ async def detect_deepfake(
     authorization: str = Header(None),
 ):
     """
-    Accept an image via multipart/form-data, detect the face, run deepfake
-    classification with attention extraction, generate an attention heatmap
-    overlay, verify the user, insert a scan record, and return:
-        {label, confidence, heatmap}
+    Accept an image, detect face, run EfficientNet-B4 with TTA + multi-crop,
+    generate Grad-CAM heatmap, return:
+        {label, confidence, low_agreement, warning, heatmap}
     """
     # ── Verify auth token ────────────────────────────────────────────
     if not authorization or not authorization.startswith("Bearer "):
@@ -95,6 +94,7 @@ async def detect_deepfake(
         )
 
     # ── Detect and crop face ─────────────────────────────────────────
+    warning = None
     try:
         face_image, bbox = detect_and_crop_face(image)
         print(f"[DETECT] Face bbox: {bbox}")
@@ -102,17 +102,27 @@ async def detect_deepfake(
         print(f"[DETECT] Face detection failed, using full image: {e}")
         face_image = image
         bbox = {"x": 0, "y": 0, "w": image.width, "h": image.height}
+        warning = "No face detected — heatmap may be inaccurate"
 
-    # ── Run inference with attention ─────────────────────────────────
+    # ── Run inference (TTA + multi-crop) ─────────────────────────────
     try:
-        results, attentions = classify_with_attention(face_image)
-        top = results[0]
+        result = classify_image(face_image)
+        label = result["label"]
+        confidence = result["confidence"]
+        low_agreement = result["low_agreement"]
 
-        label = top["label"]
-        confidence = round(top["score"], 6)
+        # Override warning if face wasn't detected
+        if warning:
+            result["warning"] = warning
 
-        # ── Generate heatmap overlay ─────────────────────────────────
-        heatmap_b64 = generate_heatmap_overlay(face_image, attentions)
+        # ── Generate Grad-CAM heatmap ────────────────────────────────
+        heatmap_b64 = generate_heatmap_overlay(
+            face_image=face_image,
+            original_image=image,
+            bbox=bbox,
+            model=get_model(),
+            device=get_device(),
+        )
 
         # ── Insert scan record ───────────────────────────────────────
         await insert_scan(
@@ -125,6 +135,8 @@ async def detect_deepfake(
         return {
             "label": label,
             "confidence": confidence,
+            "low_agreement": low_agreement,
+            "warning": result.get("warning"),
             "heatmap": heatmap_b64,
         }
     except Exception as e:
