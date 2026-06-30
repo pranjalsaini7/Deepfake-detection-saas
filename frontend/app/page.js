@@ -14,24 +14,33 @@ function getVerdict(label, confidence) {
   if (confidence < 65) {
     return { text: "Uncertain", color: "#e67e22" };
   }
-  if (label === "Fake") {
-    return { text: "Deepfake", color: "#c0392b" };
+  if (label === "Fake" || label === "Likely Fake") {
+    return { text: label === "Likely Fake" ? "Likely Fake" : "Deepfake", color: "#c0392b" };
   }
-  return { text: "Real", color: "#27ae60" };
+  return { text: label === "Likely Real" ? "Likely Real" : "Real", color: "#27ae60" };
 }
 
 export default function Home() {
   const { user, session, loading: authLoading, signOut } = useAuth();
+  const [mode, setMode] = useState("image"); // "image" | "video"
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    setFile(null);
+    setPreview(null);
+    setResult(null);
+    setError(null);
+  };
+
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     setFile(selected);
-    if (selected) {
+    if (selected && mode === "image") {
       setPreview(URL.createObjectURL(selected));
     } else {
       setPreview(null);
@@ -42,7 +51,7 @@ export default function Home() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!file || !session) return;
+    if (!file || !session || loading) return;
 
     setLoading(true);
     setResult(null);
@@ -51,8 +60,13 @@ export default function Home() {
     const formData = new FormData();
     formData.append("file", file);
 
+    const endpoint =
+      mode === "video"
+        ? "http://localhost:8000/detect-video"
+        : "http://localhost:8000/detect";
+
     try {
-      const res = await fetch("http://localhost:8000/detect", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -66,7 +80,7 @@ export default function Home() {
       }
 
       const data = await res.json();
-      setResult(data);
+      setResult({ ...data, _mode: mode });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -82,10 +96,17 @@ export default function Home() {
     );
   }
 
-  const verdict = result ? getVerdict(result.label, result.confidence) : null;
+  const isVideoResult = result?._mode === "video";
+  const verdict = result
+    ? getVerdict(
+        isVideoResult ? result.verdict : result.label,
+        isVideoResult ? result.average_confidence : result.confidence
+      )
+    : null;
 
   return (
     <main style={{ padding: "2rem", fontFamily: "sans-serif" }}>
+      {/* ── Header ── */}
       <div
         style={{
           display: "flex",
@@ -105,21 +126,73 @@ export default function Home() {
         </div>
       </div>
 
+      {/* ── Image / Video toggle ── */}
+      <div style={{ marginBottom: "1rem", display: "flex", gap: "0" }}>
+        <button
+          id="mode-image"
+          onClick={() => handleModeChange("image")}
+          style={{
+            padding: "0.5rem 1.5rem",
+            border: "1px solid #ccc",
+            borderRadius: "6px 0 0 6px",
+            backgroundColor: mode === "image" ? "#2563eb" : "#fff",
+            color: mode === "image" ? "#fff" : "#333",
+            fontWeight: mode === "image" ? "bold" : "normal",
+            cursor: "pointer",
+          }}
+        >
+          🖼️ Image
+        </button>
+        <button
+          id="mode-video"
+          onClick={() => handleModeChange("video")}
+          style={{
+            padding: "0.5rem 1.5rem",
+            border: "1px solid #ccc",
+            borderLeft: "none",
+            borderRadius: "0 6px 6px 0",
+            backgroundColor: mode === "video" ? "#2563eb" : "#fff",
+            color: mode === "video" ? "#fff" : "#333",
+            fontWeight: mode === "video" ? "bold" : "normal",
+            cursor: "pointer",
+          }}
+        >
+          🎬 Video
+        </button>
+      </div>
+
+      {/* ── Upload form ── */}
       <form onSubmit={handleSubmit}>
         <input
           id="file-input"
           type="file"
-          accept="image/*"
+          accept={mode === "video" ? "video/mp4,video/quicktime,video/webm" : "image/*"}
           onChange={handleFileChange}
         />
-        <button id="check-btn" type="submit" disabled={!file || loading}>
-          {loading ? "Analyzing…" : "Check"}
+        <button
+          id="check-btn"
+          type="submit"
+          disabled={!file || loading}
+          style={{ marginLeft: "0.5rem" }}
+        >
+          {loading
+            ? mode === "video"
+              ? "Analyzing video…"
+              : "Analyzing…"
+            : "Check"}
         </button>
       </form>
 
-      {result && (
+      {/* ── Loading spinner for video ── */}
+      {loading && mode === "video" && (
+        <div style={{ marginTop: "1rem", color: "#555" }}>
+          <p>⏳ Processing video frames… this may take a minute.</p>
+        </div>
+      )}
+
+      {/* ═══ IMAGE RESULT ═══ */}
+      {result && !isVideoResult && (
         <div id="result" style={{ marginTop: "1.5rem" }}>
-          {/* ── Warning banner (no face detected) ── */}
           {result.warning && (
             <div
               id="warning-banner"
@@ -137,7 +210,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* ── Low agreement banner ── */}
           {result.low_agreement && (
             <div
               id="agreement-banner"
@@ -155,7 +227,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* ── Verdict + confidence ── */}
           <div style={{ marginBottom: "1rem" }}>
             <p>
               <strong>Verdict:</strong>{" "}
@@ -174,7 +245,6 @@ export default function Home() {
             </p>
           </div>
 
-          {/* ── Side-by-side: Original + Heatmap ── */}
           <div
             style={{
               display: "flex",
@@ -183,7 +253,6 @@ export default function Home() {
               alignItems: "flex-start",
             }}
           >
-            {/* Original image */}
             {preview && (
               <div>
                 <h3 style={{ marginBottom: "0.5rem" }}>Original</h3>
@@ -201,7 +270,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Heatmap overlay */}
             {result.heatmap && (
               <div>
                 <h3 style={{ marginBottom: "0.5rem" }}>Grad-CAM Heatmap</h3>
@@ -234,6 +302,53 @@ export default function Home() {
         </div>
       )}
 
+      {/* ═══ VIDEO RESULT ═══ */}
+      {result && isVideoResult && (
+        <div id="video-result" style={{ marginTop: "1.5rem" }}>
+          <div style={{ marginBottom: "1rem" }}>
+            <p>
+              <strong>Verdict:</strong>{" "}
+              <span
+                style={{
+                  color: verdict.color,
+                  fontWeight: "bold",
+                  fontSize: "1.4rem",
+                }}
+              >
+                {verdict.text}
+              </span>
+            </p>
+            <p>
+              <strong>Average Confidence:</strong>{" "}
+              {result.average_confidence.toFixed(2)}%
+            </p>
+          </div>
+
+          <table
+            style={{
+              borderCollapse: "collapse",
+              marginTop: "0.5rem",
+              maxWidth: "500px",
+            }}
+          >
+            <tbody>
+              <tr>
+                <td style={statLabelStyle}>Fake Frames</td>
+                <td style={statValueStyle}>{result.fake_frame_percentage}%</td>
+              </tr>
+              <tr>
+                <td style={statLabelStyle}>Frames Checked</td>
+                <td style={statValueStyle}>{result.total_frames_checked}</td>
+              </tr>
+              <tr>
+                <td style={statLabelStyle}>Frames w/o Face</td>
+                <td style={statValueStyle}>{result.frames_with_no_face}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {error && (
         <p id="error" style={{ color: "red", marginTop: "1rem" }}>
           Error: {error}
@@ -242,3 +357,16 @@ export default function Home() {
     </main>
   );
 }
+
+const statLabelStyle = {
+  padding: "0.4rem 1rem 0.4rem 0",
+  fontWeight: "500",
+  color: "#555",
+  borderBottom: "1px solid #eee",
+};
+
+const statValueStyle = {
+  padding: "0.4rem 0",
+  fontWeight: "bold",
+  borderBottom: "1px solid #eee",
+};
