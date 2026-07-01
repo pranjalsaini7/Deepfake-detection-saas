@@ -20,9 +20,21 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"[MODEL] Using device: {DEVICE}")
 
 # ── Load EfficientNet-B4 ─────────────────────────────────────────────
+import os
+
+_CHECKPOINT_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "efficientnet_b4_deepfake.pth")
+
 print("[MODEL] Loading EfficientNet-B4 …")
 try:
     model = timm.create_model("efficientnet_b4", pretrained=True, num_classes=2)
+
+    # Load fine-tuned checkpoint if available
+    if os.path.exists(_CHECKPOINT_PATH):
+        model.load_state_dict(torch.load(_CHECKPOINT_PATH, map_location=DEVICE, weights_only=True))
+        print(f"[MODEL] Loaded fine-tuned checkpoint: {_CHECKPOINT_PATH}")
+    else:
+        print("[MODEL] No fine-tuned checkpoint found, using ImageNet pretrained weights.")
+
     model.eval()
     model = model.to(DEVICE)
     print("[MODEL] EfficientNet-B4 loaded successfully.")

@@ -34,6 +34,12 @@ frontend/out/
 pexels-*.jpg
 test_heatmap_output.png
 test_gradcam_output.png
+test_*.jpg
+backend/test_*.jpg
+diagnostic_gradcam_images/
+
+# Datasets
+archive/
 
 # Downloaded models (MediaPipe etc.)
 backend/models/
