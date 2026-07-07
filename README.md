@@ -4,6 +4,24 @@ AI-powered deepfake detection platform featuring Grad-CAM explainability, face-c
 
 ---
 
+## System Architecture
+
+```
+┌──────────────────┐     ┌──────────────────────┐     ┌──────────────┐
+│   Next.js 16     │────▶│   FastAPI (Python)    │────▶│   Supabase   │
+│   Frontend       │     │   Backend             │     │   (Postgres  │
+│   localhost:3000  │     │   localhost:8000      │     │    + Auth)   │
+└──────────────────┘     └──────────┬───────────┘     └──────────────┘
+                                    │
+                          ┌─────────▼──────────┐
+                          │  EfficientNet-B4   │
+                          │  + Grad-CAM        │
+                          │  + FaceMesh        │
+                          └────────────────────┘
+```
+
+---
+
 ## Core Features
 
 - **Multi-Crop Inference**: Combines full face crops with 4 sub-regions and 8-variant Test-Time Augmentation (TTA).
@@ -40,10 +58,12 @@ Run the SQL migration scripts in `backend/scripts/` to create the required table
 
 ## API Endpoints
 
-- **`/detect` (POST)**: Detect deepfake in an image (requires Supabase JWT).
-- **`/detect-video` (POST)**: Detect deepfakes in a video (requires Supabase JWT).
-- **`/api/detect` (POST)**: Developer API detection (requires header `X-API-Key: sk_...`).
-- **`/api-keys/generate` (POST)**: Generate a new developer API key.
+| Method | Endpoint | Auth Header | Description |
+| :--- | :--- | :--- | :--- |
+| **POST** | `/detect` | `Authorization: Bearer <JWT>` | Image detection with Grad-CAM heatmap |
+| **POST** | `/detect-video` | `Authorization: Bearer <JWT>` | Video detection (12-frame sampling) |
+| **POST** | `/api/detect` | `X-API-Key: sk_...` | Developer API image detection |
+| **POST** | `/api-keys/generate` | `Authorization: Bearer <JWT>` | Generate a new developer API key |
 
 ---
 
