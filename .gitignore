@@ -45,3 +45,9 @@ archive/
 backend/models/
 *.tflite
 *.task
+
+# IDE & agent files
+AGENTS.md
+CLAUDE.md
+.agents/
+.gemini/
