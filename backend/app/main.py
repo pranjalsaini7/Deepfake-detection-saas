@@ -40,6 +40,7 @@ from app.supabase_client import (
     verify_api_key,
     list_api_keys,
     revoke_api_key,
+    check_and_increment_usage,
 )
 
 # ── FastAPI app ──────────────────────────────────────────────────────
@@ -180,6 +181,14 @@ async def detect_deepfake(
                    "The file may be corrupted or not a valid image.",
         )
 
+    # ── Rate limit check ──────────────────────────────────────────────
+    allowed = await check_and_increment_usage(user["id"])
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Daily scan limit reached (5/day). Upgrade your plan or try again tomorrow.",
+        )
+
     # ── Run detection ────────────────────────────────────────────────
     try:
         result = _detect_single_image(image)
@@ -292,6 +301,14 @@ async def detect_video(
                 real_count += 1
             confidences.append(result["confidence"])
 
+        # ── Rate limit check ──────────────────────────────────────────
+        allowed = await check_and_increment_usage(user["id"])
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail="Daily scan limit reached (5/day). Upgrade your plan or try again tomorrow.",
+            )
+
         # ── Check if any frames had faces ────────────────────────────
         total_checked = fake_count + real_count
         if total_checked == 0:
@@ -381,6 +398,14 @@ async def api_detect(
         raise HTTPException(
             status_code=400,
             detail="Could not open the uploaded file as an image.",
+        )
+
+    # ── Rate limit check ──────────────────────────────────────────────
+    allowed = await check_and_increment_usage(key_record["user_id"])
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Daily scan limit reached (5/day). Upgrade your plan or try again tomorrow.",
         )
 
     # ── Run detection ────────────────────────────────────────────────

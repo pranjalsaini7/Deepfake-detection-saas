@@ -201,3 +201,82 @@ async def revoke_api_key(key_id: str, user_id: str) -> bool:
         )
 
     return resp.status_code == 200 or resp.status_code == 204
+
+
+# ── Rate Limiting (usage table) ─────────────────────────────────────
+
+async def check_and_increment_usage(user_id: str, daily_limit: int = 5) -> bool:
+    """
+    Check whether a user is within their daily scan limit.
+
+    - Looks up the user's row in the 'usage' table.
+    - If last_reset_date != today, resets daily_scan_count to 0.
+    - If daily_scan_count < daily_limit, increments and returns True.
+    - Otherwise returns False (rate-limited).
+
+    Creates the usage row on first use (upsert).
+    """
+    from datetime import date
+
+    today = date.today().isoformat()
+
+    async with httpx.AsyncClient() as client:
+        # 1. Try to fetch existing usage row
+        resp = await client.get(
+            f"{SUPABASE_URL}/rest/v1/usage",
+            headers=_headers,
+            params={
+                "user_id": f"eq.{user_id}",
+                "select": "id,daily_scan_count,last_reset_date",
+            },
+        )
+
+        if resp.status_code != 200:
+            print(f"[USAGE] Failed to fetch usage: {resp.status_code} {resp.text}")
+            # Fail open — allow the scan if we can't check
+            return True
+
+        data = resp.json()
+
+        if not data:
+            # 2. First-time user — create usage row with count=1
+            resp2 = await client.post(
+                f"{SUPABASE_URL}/rest/v1/usage",
+                headers={**_headers, "Prefer": "return=representation"},
+                json={
+                    "user_id": user_id,
+                    "daily_scan_count": 1,
+                    "last_reset_date": today,
+                },
+            )
+            if resp2.status_code not in (200, 201):
+                print(f"[USAGE] Failed to create usage row: {resp2.status_code} {resp2.text}")
+            return True  # First scan of the day is always allowed
+
+        row = data[0]
+        current_count = row["daily_scan_count"]
+        last_reset = row["last_reset_date"]
+
+        # 3. Reset if the date has changed
+        if last_reset != today:
+            current_count = 0
+
+        # 4. Check limit
+        if current_count >= daily_limit:
+            return False
+
+        # 5. Increment and update
+        new_count = current_count + 1
+        resp3 = await client.patch(
+            f"{SUPABASE_URL}/rest/v1/usage?user_id=eq.{user_id}",
+            headers=_headers,
+            json={
+                "daily_scan_count": new_count,
+                "last_reset_date": today,
+            },
+        )
+
+        if resp3.status_code not in (200, 204):
+            print(f"[USAGE] Failed to update usage: {resp3.status_code} {resp3.text}")
+
+        return True
