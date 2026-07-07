@@ -69,12 +69,13 @@ Run the SQL migration scripts in `backend/scripts/` to create the required table
 
 ## Model Performance & Generalization
 
-### Evaluation Results
-
-| Dataset | Accuracy | AUC-ROC | Notes |
-| :--- | :---: | :---: | :--- |
-| **In-distribution** | **99.97%** | **0.9998** | StyleGAN fakes vs. Flickr (FFHQ) reals |
-| **Celeb-DF v2 (OOD)** | **51.00%** | **0.6352** | Face-swap manipulation, unseen generator |
+┌──────────────────────┬──────────┬──────────┬──────────────────────────────────────────┐
+│ Dataset              │ Accuracy │ AUC-ROC  │ Notes                                    │
+├──────────────────────┼──────────┼──────────┼──────────────────────────────────────────┤
+│ 🎯 In-distribution   │ 99.97%   │ 0.9998   │ StyleGAN fakes vs. Flickr (FFHQ) reals   │
+├──────────────────────┼──────────┼──────────┼──────────────────────────────────────────┤
+│ ⚠️ Celeb-DF v2 (OOD) │ 51.00%   │ 0.6352   │ Face-swap manipulation, unseen generator  │
+└──────────────────────┴──────────┴──────────┴──────────────────────────────────────────┘
 
 ### Generalization & Out-of-Distribution (OOD) Analysis
 
