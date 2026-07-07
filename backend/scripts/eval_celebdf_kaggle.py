@@ -329,7 +329,7 @@ def main():
     parser.add_argument("--model_path", type=str, default=None, help="Path to model checkpoint .pth file")
     parser.add_argument("--num_frames", type=int, default=10, help="Number of frames to sample per video")
     parser.add_argument("--fast_mode", type=bool, default=True, help="Fast mode (no TTA or multi-crop)")
-    parser.add_argument("--limit_videos", type=int, default=None, help="Limit number of videos for quick test")
+    parser.add_argument("--limit_videos", type=int, default=200, help="Limit number of videos for quick test")
     
     args = parser.parse_args(args=[] if "ipykernel" in sys.modules else None)
 
