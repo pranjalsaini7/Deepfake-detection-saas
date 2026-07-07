@@ -207,18 +207,27 @@ docker run -p 8000:8000 \
 
 ---
 
-## Model Performance
+## Model Performance & Generalization
 
-| Metric | Value |
-|--------|-------|
-| Architecture | EfficientNet-B4 |
-| Dataset | 140K Real and Fake Faces (FFHQ + StyleGAN) |
-| Test Accuracy | **99.97%** |
-| Test Loss | 0.0010 |
-| Inference | TTA (8 variants) + 5-region multi-crop |
+### Evaluation Results
+
+| Dataset | Accuracy | AUC-ROC | Notes |
+| :--- | :---: | :---: | :--- |
+| **In-distribution** | **99.97%** | **0.9998** | StyleGAN fakes vs. Flickr (FFHQ) reals |
+| **Celeb-DF v2 (OOD)** | **51.00%** | **0.6352** | Face-swap manipulation, unseen generator |
+
+### Generalization & Out-of-Distribution (OOD) Analysis
+
+> [!WARNING]
+> **Generalization Caveat**: The model was trained exclusively on GAN-generated fakes (StyleGAN) and shows poor generalization to face-swap manipulation methods (Celeb-DF v2).
+
+This behavior is well-documented in deepfake detection literature: models trained on specific generative methods (e.g., GAN attribution) struggle to detect structural or blend boundaries typical of identity-swapping methods. Cross-manipulation generalization requires training on diverse datasets.
+
+* **Future Work**: Fine-tune the classifier on datasets like **FaceForensics++** (incorporating FaceSwap, Deepfakes, Face2Face, and NeuralTextures) to construct a more robust, generalizable detector.
 
 ---
 
 ## License
 
 This project is for educational and research purposes.
+
