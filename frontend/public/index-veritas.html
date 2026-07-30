@@ -1,0 +1,1777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Veritas — AI-Powered Deepfake Detection</title>
+<meta name="description" content="Advanced AI deepfake detection with Grad-CAM explainability. Detect manipulated media with 99.97% in-distribution accuracy."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+
+<style>
+/* ═══════════════════════════════════════════════════════════
+   RESET & TOKENS
+   ═══════════════════════════════════════════════════════════ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#f5f5f0;--ink:#0a0a0a;--ink-muted:#6b6b6b;--ink-faint:#999;
+  --accent:#b15f2c;--accent-from:#cf8047;--accent-to:#97501f;
+  --hero-from:#c9c9c9;--hero-to:#e8e8e3;
+  --card-bg:#111;--card-text:#e8e8e3;
+  --radius-sm:8px;--radius-md:14px;--radius-lg:22px;--radius-pill:999px;
+  --shell:1320px;--font:'Onest',system-ui,sans-serif;
+  --ease-out-expo:cubic-bezier(.16,1,.3,1);
+  --ease-in-out:cubic-bezier(.65,0,.35,1);
+}
+html{font-size:16px;scroll-behavior:auto;overflow-x:hidden}
+html.lenis{height:auto}
+.lenis.lenis-smooth{scroll-behavior:auto!important}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);
+     -webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+img{display:block;max-width:100%}
+ul,ol{list-style:none}
+
+/* ── Adaptive rem ── */
+@media(min-width:1440px){html{font-size:18px}}
+@media(min-width:1920px){html{font-size:20px}}
+@media(max-width:768px){html{font-size:14px}}
+
+.shell{max-width:var(--shell);margin:0 auto;padding:0 2rem}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE LOADER
+   ═══════════════════════════════════════════════════════════ */
+.loader{position:fixed;inset:0;z-index:9999;background:var(--ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:opacity .6s var(--ease-out-expo),transform .6s var(--ease-out-expo)}
+.loader.exit{opacity:0;transform:scale(1.05);pointer-events:none}
+.loader__brand{display:flex;align-items:center;gap:.6rem;margin-bottom:1.5rem}
+.loader__logo svg{width:2rem;height:2rem;fill:var(--accent)}
+.loader__name{font-size:1.4rem;font-weight:700;color:#fff;letter-spacing:-.02em}
+.loader__tagline{font-size:.9rem;color:var(--ink-faint);letter-spacing:.04em;
+  margin-bottom:2.5rem;text-align:center}
+.loader__bar{width:200px;height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden}
+.loader__fill{height:100%;width:0;background:linear-gradient(90deg,var(--accent-from),var(--accent-to));
+  border-radius:2px;transition:width .1s linear}
+.loader__pct{margin-top:.8rem;font-size:.75rem;font-weight:600;color:var(--ink-faint);
+  font-variant-numeric:tabular-nums}
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+.header{position:fixed;top:0;left:0;right:0;z-index:100;padding:1.2rem 2rem;
+  display:flex;align-items:center;justify-content:space-between;
+  mix-blend-mode:difference;color:#fff}
+.header__brand{display:flex;align-items:center;gap:.5rem;font-weight:700;
+  font-size:1.1rem;letter-spacing:-.02em}
+.header__brand svg{width:1.4rem;height:1.4rem;fill:currentColor}
+.header__nav{display:flex;gap:2rem;align-items:center}
+.header__nav a{font-size:.82rem;font-weight:500;opacity:.7;
+  transition:opacity .3s}
+.header__nav a:hover{opacity:1}
+.header__right{display:flex;align-items:center;gap:1.2rem}
+.header__clock{font-size:.72rem;font-weight:500;padding:.35rem .75rem;
+  border:1px solid rgba(255,255,255,.2);border-radius:var(--radius-pill);
+  font-variant-numeric:tabular-nums;opacity:.6}
+.header__menu-btn{width:2.4rem;height:2.4rem;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:5px;
+  border:1px solid rgba(255,255,255,.2);border-radius:var(--radius-pill);
+  transition:background .3s}
+.header__menu-btn span{display:block;width:14px;height:1.5px;background:#fff;
+  transition:transform .3s}
+.header__menu-btn:hover{background:rgba(255,255,255,.1)}
+@media(max-width:900px){.header__nav{display:none}}
+
+/* ═══════════════════════════════════════════════════════════
+   HERO
+   ═══════════════════════════════════════════════════════════ */
+.hero{position:relative;min-height:100vh;overflow:hidden;
+  background:#f0efe9}
+.hero__canvas-wrap{position:absolute;inset:0;z-index:1;pointer-events:none}
+.hero__canvas-wrap canvas{width:100%;height:100%;display:block}
+.hero__content{position:relative;z-index:2;display:flex;flex-direction:column;
+  align-items:flex-start;justify-content:center;min-height:100vh;
+  padding:8rem 0 4rem;pointer-events:none}
+.hero__content .pill-btn,
+.hero__content .hero-card__arrows button,
+.hero__content .hero-card__dot,
+.hero__content .hero__partner,
+.hero__content a{pointer-events:auto}
+.hero__watermark{position:absolute;bottom:8%;left:50%;transform:translateX(-50%);
+  font-size:13rem;font-weight:900;letter-spacing:-.06em;color:rgba(0,0,0,.04);
+  white-space:nowrap;pointer-events:none;user-select:none;z-index:0}
+.hero__eyebrow{display:inline-flex;align-items:center;gap:.5rem;
+  font-size:.72rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-muted);margin-bottom:1.5rem;overflow:hidden}
+.hero__eyebrow span{display:inline-block;transform:translateY(120%);
+  transition:transform .8s var(--ease-out-expo)}
+.hero__eyebrow.revealed span{transform:translateY(0)}
+.hero__eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;
+  background:var(--accent);flex-shrink:0}
+.hero__h1{font-size:clamp(2.8rem,6.5vw,5.5rem);font-weight:800;
+  line-height:1.05;letter-spacing:-.04em;margin-bottom:2rem}
+.hero__h1 .line{display:block;overflow:hidden}
+.hero__h1 .line span{display:inline-block;transform:translateY(120%);
+  transition:transform .9s var(--ease-out-expo)}
+.hero__h1 .line.revealed span{transform:translateY(0)}
+
+.hero__rating{display:flex;align-items:center;gap:.75rem;margin-bottom:2rem;
+  opacity:0;transform:translateY(20px);transition:all .8s var(--ease-out-expo)}
+.hero__rating.revealed{opacity:1;transform:translateY(0)}
+.hero__stars{display:flex;gap:2px;color:var(--accent)}
+.hero__stars svg{width:16px;height:16px;fill:currentColor}
+.hero__rating-text{font-size:.82rem;color:var(--ink-muted);font-weight:500}
+
+.hero__ctas{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:3rem;
+  opacity:0;transform:translateY(20px);transition:all .8s var(--ease-out-expo)}
+.hero__ctas.revealed{opacity:1;transform:translateY(0)}
+
+/* ── Pill Buttons ── */
+.pill-btn{display:inline-flex;align-items:center;gap:.6rem;padding:.7rem 1.5rem;
+  border-radius:var(--radius-pill);font-size:.85rem;font-weight:600;
+  transition:all .4s var(--ease-out-expo);cursor:pointer;white-space:nowrap}
+.pill-btn--dark{background:var(--ink);color:#fff}
+.pill-btn--dark:hover{background:#222;transform:translateY(-2px)}
+.pill-btn--outline{background:transparent;color:var(--ink);
+  border:1.5px solid rgba(0,0,0,.15)}
+.pill-btn--outline:hover{border-color:var(--ink);transform:translateY(-2px)}
+.pill-btn--accent{background:linear-gradient(135deg,var(--accent-from),var(--accent-to));
+  color:#fff}
+.pill-btn--accent:hover{transform:translateY(-2px);
+  box-shadow:0 8px 25px rgba(177,95,44,.3)}
+.pill-btn--ghost{background:transparent;color:var(--ink);
+  border:1.5px solid rgba(0,0,0,.08)}
+.pill-btn__arrow{display:flex;width:18px;height:18px}
+.pill-btn__arrow svg{width:100%;height:100%;fill:currentColor}
+
+/* ── Hero Card Carousel ── */
+.hero__card-wrap{margin-bottom:3rem;opacity:0;transform:translateY(20px);
+  transition:all .8s var(--ease-out-expo)}
+.hero__card-wrap.revealed{opacity:1;transform:translateY(0)}
+.hero-card{background:#fff;border-radius:var(--radius-lg);padding:1.5rem 1.8rem;
+  min-width:300px;max-width:380px;box-shadow:0 2px 20px rgba(0,0,0,.06);
+  position:relative;overflow:hidden}
+.hero-card__caption{font-size:.7rem;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:.5rem}
+.hero-card__title{font-size:1.15rem;font-weight:700;letter-spacing:-.02em;
+  line-height:1.3}
+.hero-card__nav{display:flex;align-items:center;gap:.75rem;margin-top:1rem}
+.hero-card__dot{width:6px;height:6px;border-radius:50%;
+  background:rgba(0,0,0,.15);transition:all .3s}
+.hero-card__dot.active{background:var(--accent);width:18px;border-radius:3px}
+.hero-card__arrows{display:flex;gap:.4rem;margin-left:auto}
+.hero-card__arrows button{width:28px;height:28px;border-radius:50%;
+  border:1px solid rgba(0,0,0,.1);display:flex;align-items:center;
+  justify-content:center;transition:all .3s}
+.hero-card__arrows button:hover{background:var(--ink);color:#fff;
+  border-color:var(--ink)}
+.hero-card__arrows button svg{width:12px;height:12px;fill:currentColor}
+
+/* ── Partners ── */
+.hero__partners{margin-bottom:3rem;opacity:0;transform:translateY(20px);
+  transition:all .8s var(--ease-out-expo)}
+.hero__partners.revealed{opacity:1;transform:translateY(0)}
+.hero__partners-label{font-size:.7rem;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:1rem}
+.hero__partners-grid{display:flex;flex-wrap:wrap;gap:.6rem}
+.hero__partner{padding:.45rem .9rem;border-radius:var(--radius-pill);
+  font-size:.78rem;font-weight:500;color:var(--ink-muted);
+  border:1px solid rgba(0,0,0,.08);transition:all .3s}
+.hero__partner:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── Bottom Status ── */
+.hero__status{display:flex;justify-content:space-between;align-items:center;
+  padding:1.5rem 0;border-top:1px solid rgba(0,0,0,.08);
+  opacity:0;transition:opacity .8s var(--ease-out-expo)}
+.hero__status.revealed{opacity:1}
+.hero__status-item{font-size:.75rem;font-weight:500;color:var(--ink-muted);
+  display:flex;align-items:center;gap:.4rem}
+.hero__status-item svg{width:14px;height:14px;fill:currentColor}
+.hero__scroll-cue{display:flex;align-items:center;gap:.4rem;font-size:.75rem;
+  font-weight:500;color:var(--ink-muted)}
+.hero__scroll-cue svg{width:14px;height:14px;fill:currentColor;
+  animation:bounceDown 2s infinite}
+@keyframes bounceDown{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+
+/* ═══════════════════════════════════════════════════════════
+   ABOUT / ACCURACY
+   ═══════════════════════════════════════════════════════════ */
+.about{padding:8rem 0;overflow:hidden}
+.about__grid{display:grid;grid-template-columns:1fr 1.4fr;gap:4rem;align-items:start}
+.about__left{position:relative}
+.about__globe{width:100%;aspect-ratio:1;border-radius:var(--radius-lg);
+  background:linear-gradient(135deg,#e8e5e0,#d4d0ca);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.about__globe svg{width:45%;height:45%;opacity:.15;fill:var(--ink)}
+.about__globe-eyebrow{position:absolute;top:1.5rem;left:1.5rem;
+  font-size:.7rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-muted)}
+.about__globe-caption{position:absolute;bottom:1.5rem;left:1.5rem;right:1.5rem;
+  font-size:.82rem;line-height:1.5;color:var(--ink-muted)}
+.about__statement{font-size:clamp(1.6rem,3.2vw,2.8rem);font-weight:700;
+  line-height:1.25;letter-spacing:-.03em}
+.about__statement .word{display:inline-block;overflow:hidden;margin-right:.35em}
+.about__statement .word span{display:inline-block;transform:translateY(110%);
+  transition:transform .7s var(--ease-out-expo)}
+.about__statement .word.revealed span{transform:translateY(0)}
+.about__statement .muted{color:var(--ink-muted)}
+.about__footer{display:flex;justify-content:space-between;align-items:center;
+  margin-top:3rem;padding-top:1.5rem;border-top:1px solid rgba(0,0,0,.08);flex-wrap:wrap;gap:1rem}
+.about__footer-label{font-size:.75rem;font-weight:600;color:var(--ink-faint);
+  letter-spacing:.06em;text-transform:uppercase;margin-bottom:.6rem}
+.about__chips{display:flex;gap:.5rem;flex-wrap:wrap}
+.about__chip{padding:.4rem .85rem;border-radius:var(--radius-pill);
+  font-size:.78rem;font-weight:500;border:1px solid rgba(0,0,0,.1);
+  color:var(--ink-muted);transition:all .3s}
+.about__chip:hover{border-color:var(--accent);color:var(--accent)}
+@media(max-width:900px){.about__grid{grid-template-columns:1fr;gap:2rem}}
+
+/* ═══════════════════════════════════════════════════════════
+   DETECTION DEMO PANEL
+   ═══════════════════════════════════════════════════════════ */
+.demo-panel{padding:4rem 0}
+.demo-panel__header{margin-bottom:2rem}
+.demo-panel__eyebrow{font-size:.72rem;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:.8rem;
+  display:flex;align-items:center;gap:.5rem}
+.demo-panel__eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;
+  background:var(--accent)}
+.demo-panel__h2{font-size:clamp(1.8rem,3.5vw,2.8rem);font-weight:800;
+  letter-spacing:-.04em;line-height:1.1}
+
+/* Upload Zone */
+.demo__upload-zone{border:2px dashed rgba(0,0,0,.12);border-radius:var(--radius-lg);
+  padding:3rem 2rem;text-align:center;cursor:pointer;
+  transition:all .4s var(--ease-out-expo);position:relative;
+  background:rgba(255,255,255,.5);backdrop-filter:blur(8px);min-height:220px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center}
+.demo__upload-zone:hover{border-color:var(--accent);background:rgba(255,255,255,.8);
+  transform:translateY(-2px)}
+.demo__upload-zone.dragging{border-color:var(--accent);background:rgba(177,95,44,.05);
+  transform:scale(1.01)}
+.demo__upload-zone.has-file{border-style:solid;border-color:rgba(0,0,0,.08)}
+.demo__upload-icon{width:48px;height:48px;margin:0 auto 1rem;color:var(--ink-muted);
+  opacity:.5;transition:all .3s}
+.demo__upload-zone:hover .demo__upload-icon{opacity:.8;color:var(--accent)}
+.demo__upload-title{font-size:1.1rem;font-weight:600;margin-bottom:.4rem}
+.demo__upload-subtitle{font-size:.82rem;color:var(--ink-muted)}
+.demo__upload-formats{font-size:.7rem;color:var(--ink-faint);margin-top:.6rem}
+.demo__file-input{display:none}
+
+/* Preview in upload zone */
+.demo__preview-wrap{display:flex;align-items:center;gap:1.5rem;width:100%}
+.demo__preview-img{width:120px;height:120px;border-radius:var(--radius-md);
+  object-fit:cover;border:2px solid rgba(0,0,0,.06)}
+.demo__preview-info{text-align:left;flex:1}
+.demo__preview-name{font-size:.9rem;font-weight:600;margin-bottom:.2rem;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px}
+.demo__preview-size{font-size:.75rem;color:var(--ink-muted)}
+.demo__preview-change{font-size:.78rem;color:var(--accent);font-weight:600;
+  cursor:pointer;margin-top:.5rem;display:inline-block}
+.demo__preview-change:hover{text-decoration:underline}
+
+/* Analyze Button */
+.demo__analyze-btn{margin-top:1.5rem;padding:.85rem 2.2rem;border-radius:var(--radius-pill);
+  background:var(--ink);color:#fff;font-size:.92rem;font-weight:700;
+  display:inline-flex;align-items:center;gap:.6rem;
+  transition:all .4s var(--ease-out-expo);border:none;cursor:pointer}
+.demo__analyze-btn:hover:not(:disabled){background:#222;transform:translateY(-2px);
+  box-shadow:0 8px 25px rgba(0,0,0,.15)}
+.demo__analyze-btn:disabled{opacity:.4;cursor:not-allowed}
+.demo__analyze-btn svg{width:18px;height:18px;fill:currentColor}
+.demo__analyze-btn--loading{position:relative;pointer-events:none}
+.demo__analyze-btn--loading::after{content:'';width:18px;height:18px;
+  border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;
+  animation:btnSpin .7s linear infinite;margin-left:.4rem}
+@keyframes btnSpin{to{transform:rotate(360deg)}}
+
+/* Layout: side by side */
+.demo__layout{display:grid;grid-template-columns:1fr 1fr;gap:2rem;align-items:start}
+@media(max-width:900px){.demo__layout{grid-template-columns:1fr}}
+
+/* Result Panel */
+.demo__result{background:#fff;border-radius:var(--radius-lg);
+  padding:2rem;box-shadow:0 2px 20px rgba(0,0,0,.06);
+  display:none;animation:fadeSlideUp .6s var(--ease-out-expo) forwards}
+.demo__result.visible{display:block}
+@keyframes fadeSlideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+.demo__result-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem}
+.demo__result-badge{padding:.4rem 1rem;border-radius:var(--radius-pill);
+  font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.demo__result-badge--real{background:#e8f5e9;color:#2e7d32}
+.demo__result-badge--fake{background:#fbe9e7;color:#c62828}
+.demo__result-confidence{font-size:.85rem;color:var(--ink-muted);font-weight:500}
+
+/* Gauge */
+.demo__gauge{width:100%;height:8px;background:rgba(0,0,0,.06);
+  border-radius:4px;overflow:hidden;margin-bottom:1.5rem}
+.demo__gauge-fill{height:100%;border-radius:4px;
+  transition:width 1.2s var(--ease-out-expo)}
+.demo__gauge-fill--real{background:linear-gradient(90deg,#66bb6a,#2e7d32)}
+.demo__gauge-fill--fake{background:linear-gradient(90deg,#ef5350,#c62828)}
+
+/* Heatmap display */
+.demo__heatmap-section{margin-top:1.5rem}
+.demo__heatmap-label{font-size:.72rem;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:.8rem}
+.demo__heatmap-img{width:100%;border-radius:var(--radius-md);
+  border:2px solid rgba(0,0,0,.06)}
+
+/* Detail rows */
+.demo__detail-row{display:flex;justify-content:space-between;align-items:center;
+  padding:.7rem 0;border-bottom:1px solid rgba(0,0,0,.05);font-size:.85rem}
+.demo__detail-row:last-child{border-bottom:none}
+.demo__detail-label{color:var(--ink-muted);font-weight:500}
+.demo__detail-value{font-weight:600}
+
+/* Warning */
+.demo__warning{padding:.8rem 1rem;border-radius:var(--radius-sm);
+  background:rgba(177,95,44,.08);color:var(--accent);font-size:.82rem;
+  font-weight:500;margin-top:1rem;display:flex;align-items:center;gap:.5rem}
+.demo__warning svg{width:16px;height:16px;fill:currentColor;flex-shrink:0}
+
+/* Error */
+.demo__error{padding:1rem;border-radius:var(--radius-sm);
+  background:#fbe9e7;color:#c62828;font-size:.85rem;font-weight:500;
+  margin-top:1rem;text-align:center}
+
+
+/* ═══════════════════════════════════════════════════════════
+   SHOWCASE
+   ═══════════════════════════════════════════════════════════ */
+.showcase{padding:6rem 0}
+.showcase__header{margin-bottom:3rem}
+.showcase__eyebrow{font-size:.72rem;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:.8rem;
+  display:flex;align-items:center;gap:.5rem}
+.showcase__eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;
+  background:var(--accent)}
+.showcase__h2{font-size:clamp(2rem,4vw,3.5rem);font-weight:800;
+  letter-spacing:-.04em;line-height:1.1}
+.showcase__grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1.5rem}
+.showcase-card{background:var(--card-bg);color:var(--card-text);
+  border-radius:var(--radius-lg);padding:2.5rem;position:relative;
+  overflow:hidden;transition:transform .5s var(--ease-out-expo);cursor:pointer;
+  min-height:320px;display:flex;flex-direction:column}
+.showcase-card:hover{transform:translateY(-6px)}
+.showcase-card__watermark{position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);font-size:6rem;font-weight:900;
+  letter-spacing:-.04em;opacity:.03;color:#fff;pointer-events:none;
+  white-space:nowrap}
+.showcase-card__badge{position:absolute;top:1.5rem;right:1.5rem;
+  width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.15);
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .4s var(--ease-out-expo),background .3s}
+.showcase-card:hover .showcase-card__badge{transform:rotate(45deg);
+  background:var(--accent);border-color:var(--accent)}
+.showcase-card__badge svg{width:14px;height:14px;fill:currentColor}
+.showcase-card__meta{font-size:.7rem;font-weight:500;color:rgba(255,255,255,.4);
+  margin-bottom:.3rem;display:flex;gap:1rem}
+.showcase-card__name{font-size:1.5rem;font-weight:700;letter-spacing:-.02em;
+  margin-bottom:.8rem}
+.showcase-card__desc{font-size:.85rem;line-height:1.55;color:rgba(255,255,255,.55);
+  margin-bottom:auto}
+.showcase-card__tags{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1.5rem}
+.tag-chip{padding:.3rem .65rem;border-radius:var(--radius-pill);
+  font-size:.7rem;font-weight:500;border:1px solid rgba(255,255,255,.12);
+  color:rgba(255,255,255,.5);transition:all .3s}
+.showcase-card:hover .tag-chip{border-color:rgba(255,255,255,.25);
+  color:rgba(255,255,255,.7)}
+@media(max-width:768px){.showcase__grid{grid-template-columns:1fr}}
+
+/* ═══════════════════════════════════════════════════════════
+   CAPABILITIES
+   ═══════════════════════════════════════════════════════════ */
+.capabilities{padding:6rem 0}
+.capabilities__header{margin-bottom:3rem}
+.capabilities__eyebrow{font-size:.72rem;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:.8rem;
+  display:flex;align-items:center;gap:.5rem}
+.capabilities__eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;
+  background:var(--accent)}
+.capabilities__h2{font-size:clamp(2rem,4vw,3.5rem);font-weight:800;
+  letter-spacing:-.04em;line-height:1.1}
+.cap-row{display:grid;grid-template-columns:auto 1fr auto;gap:2rem;
+  align-items:center;padding:2rem 0;border-bottom:1px solid rgba(0,0,0,.08);
+  transition:all .5s var(--ease-out-expo);cursor:pointer;position:relative;
+  overflow:hidden}
+.cap-row::before{content:'';position:absolute;inset:0;
+  background:var(--ink);transform:scaleY(0);transform-origin:bottom;
+  transition:transform .5s var(--ease-out-expo);z-index:0;border-radius:var(--radius-md)}
+.cap-row:hover::before{transform:scaleY(1)}
+.cap-row:hover{color:#fff;border-color:transparent;padding:2rem 1.5rem}
+.cap-row>*{position:relative;z-index:1}
+.cap-row__idx{font-size:.82rem;font-weight:600;color:var(--ink-faint);
+  font-variant-numeric:tabular-nums;width:2.5rem}
+.cap-row:hover .cap-row__idx{color:var(--accent)}
+.cap-row__body{}
+.cap-row__title{font-size:1.5rem;font-weight:700;letter-spacing:-.02em;
+  margin-bottom:.3rem}
+.cap-row__desc{font-size:.85rem;color:var(--ink-muted);line-height:1.5}
+.cap-row:hover .cap-row__desc{color:rgba(255,255,255,.55)}
+.cap-row__badge{width:36px;height:36px;border-radius:50%;
+  border:1px solid rgba(0,0,0,.1);display:flex;align-items:center;
+  justify-content:center;transition:all .4s var(--ease-out-expo)}
+.cap-row:hover .cap-row__badge{border-color:var(--accent);background:var(--accent)}
+.cap-row__badge svg{width:14px;height:14px;fill:currentColor}
+
+/* ═══════════════════════════════════════════════════════════
+   STATS
+   ═══════════════════════════════════════════════════════════ */
+.stats{background:var(--ink);color:#fff;padding:6rem 0;border-radius:var(--radius-lg);
+  margin:2rem 0}
+.stats__header{margin-bottom:3rem}
+.stats__eyebrow{font-size:.72rem;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:.8rem;
+  display:flex;align-items:center;gap:.5rem}
+.stats__eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;
+  background:var(--accent)}
+.stats__h2{font-size:clamp(1.8rem,3.5vw,2.8rem);font-weight:800;
+  letter-spacing:-.03em;line-height:1.15;color:rgba(255,255,255,.9)}
+.stats__grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2rem;
+  margin-top:3rem}
+.stat{text-align:left;opacity:0;transform:translateY(30px);
+  transition:all .8s var(--ease-out-expo)}
+.stat.revealed{opacity:1;transform:translateY(0)}
+.stat__number{font-size:clamp(2.5rem,5vw,4rem);font-weight:800;
+  letter-spacing:-.04em;line-height:1;margin-bottom:.5rem;
+  font-variant-numeric:tabular-nums}
+.stat__label{font-size:.82rem;color:rgba(255,255,255,.45);font-weight:500}
+@media(max-width:768px){.stats__grid{grid-template-columns:repeat(2,1fr)}}
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════ */
+.footer{padding:6rem 0 2rem;position:relative;overflow:hidden}
+.footer__cta{text-align:center;margin-bottom:5rem}
+.footer__cta h2{font-size:clamp(2rem,4.5vw,3.5rem);font-weight:800;
+  letter-spacing:-.04em;line-height:1.1;margin-bottom:2rem}
+.footer__cols{display:grid;grid-template-columns:1.5fr repeat(3,1fr);
+  gap:2rem;padding:3rem 0;border-top:1px solid rgba(0,0,0,.08)}
+.footer__brand-col{}
+.footer__brand-name{font-size:1.1rem;font-weight:700;margin-bottom:.8rem;
+  display:flex;align-items:center;gap:.5rem}
+.footer__brand-name svg{width:1.2rem;height:1.2rem;fill:var(--accent)}
+.footer__brand-tagline{font-size:.82rem;color:var(--ink-muted);line-height:1.55;
+  max-width:280px}
+.footer__col-title{font-size:.72rem;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:1rem}
+.footer__col-links{display:flex;flex-direction:column;gap:.6rem}
+.footer__col-links a{font-size:.85rem;color:var(--ink-muted);
+  transition:color .3s}
+.footer__col-links a:hover{color:var(--ink)}
+.footer__legal{display:flex;justify-content:space-between;align-items:center;
+  padding:2rem 0;border-top:1px solid rgba(0,0,0,.08);margin-top:3rem;
+  font-size:.75rem;color:var(--ink-faint);flex-wrap:wrap;gap:.5rem}
+.footer__legal-links{display:flex;gap:1.5rem}
+.footer__legal-links a{transition:color .3s}
+.footer__legal-links a:hover{color:var(--ink)}
+.footer__watermark{position:absolute;bottom:-2rem;left:50%;
+  transform:translateX(-50%);font-size:13rem;font-weight:900;
+  letter-spacing:-.06em;color:rgba(0,0,0,.03);white-space:nowrap;
+  pointer-events:none;user-select:none}
+@media(max-width:768px){.footer__cols{grid-template-columns:1fr 1fr;gap:2rem}}
+
+/* ═══════════════════════════════════════════════════════════
+   NAV MENU OVERLAY
+   ═══════════════════════════════════════════════════════════ */
+.nav-menu{position:fixed;inset:0;z-index:200;background:var(--ink);
+  color:#fff;display:flex;flex-direction:column;
+  transform:translateY(-100%);transition:transform .7s var(--ease-out-expo);
+  overflow-y:auto}
+.nav-menu.open{transform:translateY(0)}
+.nav-menu__top{display:flex;justify-content:space-between;align-items:center;
+  padding:1.2rem 2rem;flex-shrink:0}
+.nav-menu__brand{font-size:1.1rem;font-weight:700;display:flex;
+  align-items:center;gap:.5rem}
+.nav-menu__brand svg{width:1.4rem;height:1.4rem;fill:var(--accent)}
+.nav-menu__close{width:2.4rem;height:2.4rem;border-radius:50%;
+  border:1px solid rgba(255,255,255,.15);display:flex;align-items:center;
+  justify-content:center;transition:background .3s;font-size:1rem}
+.nav-menu__close:hover{background:rgba(255,255,255,.1)}
+.nav-menu__links{flex:1;display:flex;flex-direction:column;
+  justify-content:center;padding:2rem}
+.nav-menu__link{display:flex;align-items:baseline;gap:1.5rem;
+  padding:1.5rem 0;border-bottom:1px solid rgba(255,255,255,.06);
+  opacity:0;transform:translateY(30px);transition:all .5s var(--ease-out-expo)}
+.nav-menu.open .nav-menu__link{opacity:1;transform:translateY(0)}
+.nav-menu__link-idx{font-size:.8rem;font-weight:500;color:var(--accent);
+  font-variant-numeric:tabular-nums}
+.nav-menu__link-text{font-size:clamp(2rem,5vw,3.5rem);font-weight:800;
+  letter-spacing:-.04em;transition:color .3s}
+.nav-menu__link:hover .nav-menu__link-text{color:var(--accent)}
+.nav-menu__bottom{padding:1.5rem 2rem;border-top:1px solid rgba(255,255,255,.06);
+  flex-shrink:0}
+.nav-menu__bottom-btn{font-size:1rem;font-weight:600;color:var(--accent);
+  display:flex;align-items:center;gap:.5rem;transition:opacity .3s}
+.nav-menu__bottom-btn:hover{opacity:.7}
+
+/* ═══════════════════════════════════════════════════════════
+   REQUEST MODAL
+   ═══════════════════════════════════════════════════════════ */
+.modal{position:fixed;inset:0;z-index:300;display:flex;align-items:center;
+  justify-content:center;opacity:0;pointer-events:none;
+  transition:opacity .4s var(--ease-out-expo)}
+.modal.open{opacity:1;pointer-events:all}
+.modal__backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.modal__card{position:relative;background:#fff;border-radius:var(--radius-lg);
+  padding:3rem;width:90%;max-width:520px;
+  transform:translateY(40px) scale(.97);
+  transition:transform .5s var(--ease-out-expo);z-index:1}
+.modal.open .modal__card{transform:translateY(0) scale(1)}
+.modal__close{position:absolute;top:1.2rem;right:1.2rem;width:2rem;height:2rem;
+  border-radius:50%;border:1px solid rgba(0,0,0,.1);display:flex;
+  align-items:center;justify-content:center;font-size:.9rem;transition:background .3s}
+.modal__close:hover{background:rgba(0,0,0,.05)}
+.modal__eyebrow{font-size:.7rem;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:.5rem}
+.modal__h2{font-size:1.8rem;font-weight:800;letter-spacing:-.03em;
+  margin-bottom:1.5rem}
+.modal__form{display:flex;flex-direction:column;gap:1rem}
+.modal__field label{display:block;font-size:.78rem;font-weight:600;
+  color:var(--ink-muted);margin-bottom:.35rem;letter-spacing:.02em}
+.modal__field input,.modal__field textarea{width:100%;padding:.75rem 1rem;
+  border:1.5px solid rgba(0,0,0,.1);border-radius:var(--radius-md);
+  font-size:.9rem;font-family:inherit;transition:border-color .3s;
+  outline:none;resize:vertical}
+.modal__field input:focus,.modal__field textarea:focus{border-color:var(--accent)}
+.modal__note{font-size:.75rem;color:var(--ink-faint);margin-top:.3rem}
+.modal__submit{margin-top:.5rem}
+.modal__success{display:none;text-align:center;padding:2rem 0}
+.modal__success h3{font-size:1.5rem;font-weight:800;margin-bottom:.5rem}
+.modal__success p{font-size:.9rem;color:var(--ink-muted);line-height:1.5}
+.modal.success .modal__form{display:none}
+.modal.success .modal__h2{display:none}
+.modal.success .modal__success{display:block}
+
+/* ═══════════════════════════════════════════════════════════
+   SCROLL ENTRANCE ANIMATIONS
+   ═══════════════════════════════════════════════════════════ */
+.entrance{opacity:0;transform:translateY(40px);
+  transition:opacity .8s var(--ease-out-expo),transform .8s var(--ease-out-expo)}
+.entrance.revealed{opacity:1;transform:translateY(0)}
+
+/* ═══════════════════════════════════════════════════════════
+   PREMIUM SCREEN BEZEL MOCKUP
+   ═══════════════════════════════════════════════════════════ */
+.screen-bezel {
+  display: none;
+}
+@media(min-width:1025px) {
+  .screen-bezel {
+    display: block;
+    position: fixed;
+    inset: 0;
+    border: 20px solid #0d0d0d;
+    border-radius: 36px;
+    pointer-events: none;
+    z-index: 99999;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 15px 50px rgba(0,0,0,0.6);
+  }
+}
+</style>
+</head>
+<body>
+<div class="screen-bezel"></div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE LOADER
+     ═══════════════════════════════════════════════════════════ -->
+<div class="loader" id="loader">
+  <div class="loader__brand">
+    <div class="loader__logo">
+      <svg viewBox="0 0 32 32"><path d="M16 2L2 9v14l14 7 14-7V9L16 2zm0 3.5L26.5 10 16 14.5 5.5 10 16 5.5zM4 11.5l11 5.5v11L4 22.5v-11zm24 0v11L17 28V17l11-5.5z"/></svg>
+    </div>
+    <span class="loader__name">Veritas</span>
+  </div>
+  <p class="loader__tagline">Detecting what the eye can't see.</p>
+  <div class="loader__bar"><div class="loader__fill" id="loaderFill"></div></div>
+  <div class="loader__pct" id="loaderPct">0%</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     HEADER
+     ═══════════════════════════════════════════════════════════ -->
+<header class="header" id="header">
+  <a href="#home" class="header__brand">
+    <svg viewBox="0 0 32 32"><path d="M16 2L2 9v14l14 7 14-7V9L16 2zm0 3.5L26.5 10 16 14.5 5.5 10 16 5.5zM4 11.5l11 5.5v11L4 22.5v-11zm24 0v11L17 28V17l11-5.5z"/></svg>
+    Veritas
+  </a>
+  <nav class="header__nav">
+    <a href="#home">Home</a>
+    <a href="#works">Demo</a>
+    <a href="#services">Detection</a>
+    <a href="#about">Accuracy</a>
+    <a href="#" data-action="open-modal">Contact</a>
+  </nav>
+  <div class="header__right">
+    <span class="header__clock" id="clock">00:00:00 IST</span>
+    <button class="header__menu-btn" id="menuBtn" aria-label="Open menu">
+      <span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MAIN CONTENT
+     ═══════════════════════════════════════════════════════════ -->
+<main>
+
+<!-- ── HERO ── -->
+<section class="hero" id="home">
+  <div class="hero__canvas-wrap" id="heroCanvasWrap">
+    <canvas id="heroCanvas"></canvas>
+  </div>
+  <div class="hero__watermark">VERITAS</div>
+  <div class="shell hero__content">
+
+    <div class="hero__eyebrow" data-reveal="eyebrow">
+      <span>AI Detection Engine</span>
+    </div>
+
+    <h1 class="hero__h1">
+      <span class="line" data-reveal="line" data-delay="0"><span>See what's</span></span>
+      <span class="line" data-reveal="line" data-delay="100"><span>real. Catch</span></span>
+      <span class="line" data-reveal="line" data-delay="200"><span>what isn't.</span></span>
+    </h1>
+
+    <div class="hero__rating" data-reveal="fade" data-delay="400">
+      <div class="hero__stars">
+        <svg viewBox="0 0 20 20"><path d="M10 1l2.39 4.84L18 6.71l-4 3.9.94 5.5L10 13.4l-4.94 2.7.94-5.5-4-3.9 5.61-.87L10 1z"/></svg>
+        <svg viewBox="0 0 20 20"><path d="M10 1l2.39 4.84L18 6.71l-4 3.9.94 5.5L10 13.4l-4.94 2.7.94-5.5-4-3.9 5.61-.87L10 1z"/></svg>
+        <svg viewBox="0 0 20 20"><path d="M10 1l2.39 4.84L18 6.71l-4 3.9.94 5.5L10 13.4l-4.94 2.7.94-5.5-4-3.9 5.61-.87L10 1z"/></svg>
+        <svg viewBox="0 0 20 20"><path d="M10 1l2.39 4.84L18 6.71l-4 3.9.94 5.5L10 13.4l-4.94 2.7.94-5.5-4-3.9 5.61-.87L10 1z"/></svg>
+        <svg viewBox="0 0 20 20"><path d="M10 1l2.39 4.84L18 6.71l-4 3.9.94 5.5L10 13.4l-4.94 2.7.94-5.5-4-3.9 5.61-.87L10 1z"/></svg>
+      </div>
+      <span class="hero__rating-text">99.97% in-distribution accuracy</span>
+    </div>
+
+    <div class="hero__ctas" data-reveal="fade" data-delay="500">
+      <a href="#demo" class="pill-btn pill-btn--dark">
+        Try the Demo
+        <span class="pill-btn__arrow"><svg viewBox="0 0 20 20"><path d="M5 10h10M11 6l4 4-4 4"/></svg></span>
+      </a>
+      <button class="pill-btn pill-btn--outline" data-action="open-modal">
+        Get API Access
+      </button>
+    </div>
+
+    <div class="hero__card-wrap" data-reveal="fade" data-delay="600">
+      <div class="hero-card" id="heroCard">
+        <div class="hero-card__caption" id="heroCardCaption">Detection Engine</div>
+        <div class="hero-card__title" id="heroCardTitle">EfficientNet-B4, fine-tuned.</div>
+        <div class="hero-card__nav">
+          <span class="hero-card__dot active" data-dot="0"></span>
+          <span class="hero-card__dot" data-dot="1"></span>
+          <span class="hero-card__dot" data-dot="2"></span>
+          <div class="hero-card__arrows">
+            <button id="heroCardPrev" aria-label="Previous">
+              <svg viewBox="0 0 20 20"><path d="M13 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+            </button>
+            <button id="heroCardNext" aria-label="Next">
+              <svg viewBox="0 0 20 20"><path d="M7 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero__partners" data-reveal="fade" data-delay="700">
+      <div class="hero__partners-label">Built with</div>
+      <div class="hero__partners-grid">
+        <span class="hero__partner">PyTorch</span>
+        <span class="hero__partner">EfficientNet</span>
+        <span class="hero__partner">Grad-CAM</span>
+        <span class="hero__partner">Supabase</span>
+        <span class="hero__partner">Render</span>
+        <span class="hero__partner">Vercel</span>
+        <span class="hero__partner">OpenCV</span>
+      </div>
+    </div>
+
+    <div class="hero__status" data-reveal="fade" data-delay="800">
+      <span class="hero__status-item">140K+ images trained</span>
+      <span class="hero__status-item">Real-time inference</span>
+      <span class="hero__scroll-cue">
+        Scroll to explore
+        <svg viewBox="0 0 20 20"><path d="M10 4v12M6 12l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </span>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── ABOUT / ACCURACY ── -->
+<section class="about" id="about">
+  <div class="shell">
+    <div class="about__grid">
+      <div class="about__left entrance" data-entrance>
+        <div class="about__globe">
+          <span class="about__globe-eyebrow">How It Works</span>
+          <svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" stroke-width="1"/><ellipse cx="100" cy="100" rx="40" ry="80" fill="none" stroke="currentColor" stroke-width="1"/><ellipse cx="100" cy="100" rx="65" ry="80" fill="none" stroke="currentColor" stroke-width="1"/><line x1="20" y1="70" x2="180" y2="70" stroke="currentColor" stroke-width="1"/><line x1="20" y1="100" x2="180" y2="100" stroke="currentColor" stroke-width="1"/><line x1="20" y1="130" x2="180" y2="130" stroke="currentColor" stroke-width="1"/></svg>
+          <span class="about__globe-caption">Every frame is analyzed and cross-checked before a result is returned.</span>
+        </div>
+      </div>
+      <div class="about__right">
+        <h2 class="about__statement" id="aboutStatement">
+          <!-- Words will be injected by JS for reveal animation -->
+        </h2>
+        <div class="about__footer entrance" data-entrance>
+          <div>
+            <div class="about__footer-label">Read the technical writeup</div>
+            <div class="about__chips">
+              <a href="#" class="about__chip">Model Card</a>
+              <a href="#" class="about__chip">GitHub</a>
+              <a href="#" class="about__chip">API Docs</a>
+            </div>
+          </div>
+          <a href="#about" class="pill-btn pill-btn--outline">
+            Accuracy Details
+            <span class="pill-btn__arrow"><svg viewBox="0 0 20 20"><path d="M5 10h10M11 6l4 4-4 4"/></svg></span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DETECTION DEMO PANEL ── -->
+<section class="demo-panel" id="demo">
+  <div class="shell">
+    <div class="demo-panel__header entrance" data-entrance>
+      <div class="demo-panel__eyebrow">Interactive System</div>
+      <h2 class="demo-panel__h2">Deepfake Detection Workspace</h2>
+    </div>
+    
+    <div class="demo__layout entrance" data-entrance>
+      <!-- Upload Card -->
+      <div class="demo__upload-card">
+        <div class="demo__upload-zone" id="uploadZone">
+          <div class="demo__upload-default" id="uploadDefault">
+            <svg class="demo__upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 16V8M9 11l3-3 3 3M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h3 class="demo__upload-title">Drag & drop your media here</h3>
+            <p class="demo__upload-subtitle">or click to browse local files</p>
+            <p class="demo__upload-formats">Supports JPEG, PNG, WEBP (Max 5MB)</p>
+          </div>
+          
+          <div class="demo__preview-wrap" id="uploadPreviewWrap" style="display: none;">
+            <img class="demo__preview-img" id="uploadPreviewImg" src="" alt="Preview">
+            <div class="demo__preview-info">
+              <div class="demo__preview-name" id="uploadPreviewName">filename.jpg</div>
+              <div class="demo__preview-size" id="uploadPreviewSize">0 KB</div>
+              <span class="demo__preview-change" id="changeFileBtn">Change media</span>
+            </div>
+          </div>
+          
+          <input type="file" class="demo__file-input" id="fileInput" accept="image/jpeg,image/png,image/webp">
+        </div>
+        
+        <button class="demo__analyze-btn" id="analyzeBtn" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Run Diagnostic Analysis
+        </button>
+      </div>
+
+      <!-- Result Card -->
+      <div class="demo__result" id="demoResult">
+        <div class="demo__result-header">
+          <span class="demo__result-badge" id="resultBadge">Real</span>
+          <span class="demo__result-confidence" id="resultConfidence">Confidence: 99.97%</span>
+        </div>
+
+        <div class="demo__gauge">
+          <div class="demo__gauge-fill" id="gaugeFill" style="width: 0%;"></div>
+        </div>
+
+        <div class="demo__details">
+          <div class="demo__detail-row">
+            <span class="demo__detail-label">Model Engine</span>
+            <span class="demo__detail-value">EfficientNet-B4 Fine-Tuned</span>
+          </div>
+          <div class="demo__detail-row">
+            <span class="demo__detail-label">Inference Time</span>
+            <span class="demo__detail-value" id="inferenceTime">248ms</span>
+          </div>
+          <div class="demo__detail-row">
+            <span class="demo__detail-label">Status Check</span>
+            <span class="demo__detail-value" style="color: #2e7d32;">Verified Secure</span>
+          </div>
+        </div>
+
+        <div class="demo__warning" id="demoWarning" style="display: none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span id="warningText"></span>
+        </div>
+
+        <div class="demo__heatmap-section" id="heatmapSection" style="display: none;">
+          <div class="demo__heatmap-label">Grad-CAM Explainability Heatmap</div>
+          <img class="demo__heatmap-img" id="heatmapImg" src="" alt="Grad-CAM Heatmap">
+        </div>
+      </div>
+    </div>
+
+    <div class="demo__error" id="demoError" style="display: none;"></div>
+  </div>
+</section>
+
+<!-- ── SHOWCASE ── -->
+<section class="showcase" id="works">
+  <div class="shell">
+    <div class="showcase__header entrance" data-entrance>
+      <div class="showcase__eyebrow">Live Demo</div>
+      <h2 class="showcase__h2">See It In Action</h2>
+    </div>
+    <div class="showcase__grid">
+
+      <div class="showcase-card entrance" data-entrance>
+        <div class="showcase-card__watermark">VERITAS</div>
+        <div class="showcase-card__badge">
+          <svg viewBox="0 0 20 20"><path d="M6 14L14 6M14 6H7M14 6v7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+        </div>
+        <div class="showcase-card__meta"><span>Detection</span><span>2026</span></div>
+        <div class="showcase-card__name">Frame-by-Frame Video</div>
+        <p class="showcase-card__desc">Samples video at intervals and flags manipulated segments with per-frame confidence scores.</p>
+        <div class="showcase-card__tags">
+          <span class="tag-chip">Video</span>
+          <span class="tag-chip">Frame Sampling</span>
+          <span class="tag-chip">Confidence Score</span>
+        </div>
+      </div>
+
+      <div class="showcase-card entrance" data-entrance>
+        <div class="showcase-card__watermark">VERITAS</div>
+        <div class="showcase-card__badge">
+          <svg viewBox="0 0 20 20"><path d="M6 14L14 6M14 6H7M14 6v7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+        </div>
+        <div class="showcase-card__meta"><span>Detection</span><span>2026</span></div>
+        <div class="showcase-card__name">Single Image Analysis</div>
+        <p class="showcase-card__desc">Upload a photo and get an instant real/fake classification with a Grad-CAM explainability overlay.</p>
+        <div class="showcase-card__tags">
+          <span class="tag-chip">Image</span>
+          <span class="tag-chip">Grad-CAM</span>
+          <span class="tag-chip">Explainability</span>
+        </div>
+      </div>
+
+      <div class="showcase-card entrance" data-entrance>
+        <div class="showcase-card__watermark">VERITAS</div>
+        <div class="showcase-card__badge">
+          <svg viewBox="0 0 20 20"><path d="M6 14L14 6M14 6H7M14 6v7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+        </div>
+        <div class="showcase-card__meta"><span>Integration</span><span>2026</span></div>
+        <div class="showcase-card__name">Developer API</div>
+        <p class="showcase-card__desc">SHA-256 signed detection results, built for platforms that need verifiable moderation at scale.</p>
+        <div class="showcase-card__tags">
+          <span class="tag-chip">API</span>
+          <span class="tag-chip">SHA-256</span>
+          <span class="tag-chip">Developer Tools</span>
+        </div>
+      </div>
+
+      <div class="showcase-card entrance" data-entrance>
+        <div class="showcase-card__watermark">VERITAS</div>
+        <div class="showcase-card__badge">
+          <svg viewBox="0 0 20 20"><path d="M6 14L14 6M14 6H7M14 6v7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+        </div>
+        <div class="showcase-card__meta"><span>Platform</span><span>2026</span></div>
+        <div class="showcase-card__name">Dashboard &amp; History</div>
+        <p class="showcase-card__desc">Every scan logged and auditable, with Supabase-backed auth and a full detection history.</p>
+        <div class="showcase-card__tags">
+          <span class="tag-chip">Dashboard</span>
+          <span class="tag-chip">Supabase</span>
+          <span class="tag-chip">Auth</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── CAPABILITIES ── -->
+<section class="capabilities" id="services">
+  <div class="shell">
+    <div class="capabilities__header entrance" data-entrance>
+      <div class="capabilities__eyebrow">Capabilities</div>
+      <h2 class="capabilities__h2">What the engine does</h2>
+    </div>
+
+    <div class="cap-row entrance" data-entrance>
+      <span class="cap-row__idx">01</span>
+      <div class="cap-row__body">
+        <div class="cap-row__title">Image Detection</div>
+        <p class="cap-row__desc">Real/fake classification with confidence scoring on single frames.</p>
+      </div>
+      <div class="cap-row__badge">
+        <svg viewBox="0 0 20 20"><path d="M6 14L14 6M14 6H7M14 6v7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </div>
+    </div>
+
+    <div class="cap-row entrance" data-entrance>
+      <span class="cap-row__idx">02</span>
+      <div class="cap-row__body">
+        <div class="cap-row__title">Video Analysis</div>
+        <p class="cap-row__desc">Sampled frame-by-frame scanning across full video uploads.</p>
+      </div>
+      <div class="cap-row__badge">
+        <svg viewBox="0 0 20 20"><path d="M6 14L14 6M14 6H7M14 6v7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </div>
+    </div>
+
+    <div class="cap-row entrance" data-entrance>
+      <span class="cap-row__idx">03</span>
+      <div class="cap-row__body">
+        <div class="cap-row__title">Grad-CAM Explainability</div>
+        <p class="cap-row__desc">Visual heatmaps showing exactly what the model is reacting to.</p>
+      </div>
+      <div class="cap-row__badge">
+        <svg viewBox="0 0 20 20"><path d="M6 14L14 6M14 6H7M14 6v7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </div>
+    </div>
+
+    <div class="cap-row entrance" data-entrance>
+      <span class="cap-row__idx">04</span>
+      <div class="cap-row__body">
+        <div class="cap-row__title">Developer API</div>
+        <p class="cap-row__desc">SHA-256 signed results for platforms that need auditable moderation.</p>
+      </div>
+      <div class="cap-row__badge">
+        <svg viewBox="0 0 20 20"><path d="M6 14L14 6M14 6H7M14 6v7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── STATS ── -->
+<section class="stats" id="stats">
+  <div class="shell">
+    <div class="stats__header entrance" data-entrance>
+      <div class="stats__eyebrow">By the numbers</div>
+      <h2 class="stats__h2">Trained on scale, tested against reality.</h2>
+    </div>
+    <div class="stats__grid">
+      <div class="stat" data-stat data-target="140" data-suffix="K+" data-prefix="">
+        <div class="stat__number">0K+</div>
+        <div class="stat__label">Training images</div>
+      </div>
+      <div class="stat" data-stat data-target="99.97" data-suffix="%" data-prefix="" data-decimal="2">
+        <div class="stat__number">0%</div>
+        <div class="stat__label">In-distribution accuracy</div>
+      </div>
+      <div class="stat" data-stat data-target="0.635" data-suffix="" data-prefix="" data-decimal="3">
+        <div class="stat__number">0</div>
+        <div class="stat__label">Celeb-DF v2 AUC</div>
+      </div>
+      <div class="stat" data-stat data-target="300" data-suffix="ms" data-prefix="<">
+        <div class="stat__number">&lt;0ms</div>
+        <div class="stat__label">Inference response time</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════════════════ -->
+<footer class="footer" id="contact">
+  <div class="shell">
+    <div class="footer__cta entrance" data-entrance>
+      <h2>Ready to verify what's real?</h2>
+      <button class="pill-btn pill-btn--dark" data-action="open-modal">
+        Get API Access
+        <span class="pill-btn__arrow"><svg viewBox="0 0 20 20"><path d="M5 10h10M11 6l4 4-4 4"/></svg></span>
+      </button>
+    </div>
+
+    <div class="footer__cols">
+      <div class="footer__brand-col">
+        <div class="footer__brand-name">
+          <svg viewBox="0 0 32 32"><path d="M16 2L2 9v14l14 7 14-7V9L16 2zm0 3.5L26.5 10 16 14.5 5.5 10 16 5.5zM4 11.5l11 5.5v11L4 22.5v-11zm24 0v11L17 28V17l11-5.5z"/></svg>
+          Veritas
+        </div>
+        <p class="footer__brand-tagline">An AI detection engine built to explain its answers, not just give them.</p>
+      </div>
+      <div>
+        <div class="footer__col-title">Company</div>
+        <div class="footer__col-links">
+          <a href="#about">About</a>
+          <a href="#">Model Card</a>
+          <a href="#">Blog</a>
+          <a href="#" data-action="open-modal">Contact</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer__col-title">Product</div>
+        <div class="footer__col-links">
+          <a href="#">API Docs</a>
+          <a href="#works">Detection Demo</a>
+          <a href="#">Pricing</a>
+          <a href="#">Dashboard</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer__col-title">Social</div>
+        <div class="footer__col-links">
+          <a href="#">GitHub</a>
+          <a href="#">Twitter / X</a>
+          <a href="#">LinkedIn</a>
+          <a href="#">Discord</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer__legal">
+      <span>&copy; 2026 Veritas. All rights reserved.</span>
+      <div class="footer__legal-links">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer__watermark">VERITAS</div>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════════════
+     NAV MENU OVERLAY
+     ═══════════════════════════════════════════════════════════ -->
+<div class="nav-menu" id="navMenu">
+  <div class="nav-menu__top">
+    <div class="nav-menu__brand">
+      <svg viewBox="0 0 32 32"><path d="M16 2L2 9v14l14 7 14-7V9L16 2zm0 3.5L26.5 10 16 14.5 5.5 10 16 5.5zM4 11.5l11 5.5v11L4 22.5v-11zm24 0v11L17 28V17l11-5.5z"/></svg>
+      Veritas
+    </div>
+    <button class="nav-menu__close" id="menuClose" aria-label="Close menu">&times;</button>
+  </div>
+  <nav class="nav-menu__links">
+    <a href="#home" class="nav-menu__link" style="transition-delay:.05s">
+      <span class="nav-menu__link-idx">01</span>
+      <span class="nav-menu__link-text">Home</span>
+    </a>
+    <a href="#works" class="nav-menu__link" style="transition-delay:.1s">
+      <span class="nav-menu__link-idx">02</span>
+      <span class="nav-menu__link-text">Demo</span>
+    </a>
+    <a href="#services" class="nav-menu__link" style="transition-delay:.15s">
+      <span class="nav-menu__link-idx">03</span>
+      <span class="nav-menu__link-text">Detection</span>
+    </a>
+    <a href="#about" class="nav-menu__link" style="transition-delay:.2s">
+      <span class="nav-menu__link-idx">04</span>
+      <span class="nav-menu__link-text">Accuracy</span>
+    </a>
+    <a href="#" class="nav-menu__link" data-action="open-modal" style="transition-delay:.25s">
+      <span class="nav-menu__link-idx">05</span>
+      <span class="nav-menu__link-text">Contact</span>
+    </a>
+  </nav>
+  <div class="nav-menu__bottom">
+    <button class="nav-menu__bottom-btn" data-action="open-modal">
+      Get API Access →
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     REQUEST MODAL
+     ═══════════════════════════════════════════════════════════ -->
+<div class="modal" id="requestModal">
+  <div class="modal__backdrop" data-action="close-modal"></div>
+  <div class="modal__card">
+    <button class="modal__close" data-action="close-modal">&times;</button>
+    <div class="modal__eyebrow">API Access</div>
+    <h2 class="modal__h2">Request API access.</h2>
+    <form class="modal__form" id="requestForm">
+      <div class="modal__field">
+        <label for="reqName">Name</label>
+        <input type="text" id="reqName" placeholder="Your name" required/>
+      </div>
+      <div class="modal__field">
+        <label for="reqEmail">Email</label>
+        <input type="email" id="reqEmail" placeholder="you@company.com" required/>
+      </div>
+      <div class="modal__field">
+        <label for="reqUseCase">Use case</label>
+        <textarea id="reqUseCase" rows="4" placeholder="What are you building, and what's your expected volume?"></textarea>
+      </div>
+      <p class="modal__note">We reply within one business day with your API key.</p>
+      <button type="submit" class="pill-btn pill-btn--dark modal__submit">
+        Request access
+        <span class="pill-btn__arrow"><svg viewBox="0 0 20 20"><path d="M5 10h10M11 6l4 4-4 4"/></svg></span>
+      </button>
+    </form>
+    <div class="modal__success">
+      <h3>Access request received</h3>
+      <p>Thanks for reaching out — we'll email your API key within one business day.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════════ -->
+<script type="importmap">
+{"imports":{"lenis":"https://cdn.jsdelivr.net/npm/lenis@1.1.18/+esm"}}
+</script>
+<script type="module">
+import Lenis from 'lenis';
+
+/* API base — auto-detects local dev vs deployed */
+const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : '';
+
+/* ═══════════════════════════════════════════════════════════
+   LENIS SMOOTH SCROLL
+   ═══════════════════════════════════════════════════════════ */
+const lenis = new Lenis({ duration: 1.2, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
+function raf(time) { lenis.raf(time); requestAnimationFrame(raf); }
+requestAnimationFrame(raf);
+
+function scrollTo(target) {
+  const el = document.querySelector(target);
+  if (el) lenis.scrollTo(el, { offset: 0, duration: 1.2 });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SPRING HELPER
+   ═══════════════════════════════════════════════════════════ */
+class Spring {
+  constructor({ stiffness = 180, damping = 12, mass = 1 } = {}) {
+    this.stiffness = stiffness; this.damping = damping; this.mass = mass;
+    this.value = 0; this.target = 0; this.velocity = 0;
+  }
+  set(target) { this.target = target; }
+  tick(dt = 1 / 60) {
+    const force = -this.stiffness * (this.value - this.target);
+    const dampForce = -this.damping * this.velocity;
+    this.velocity += (force + dampForce) / this.mass * dt;
+    this.value += this.velocity * dt;
+    return this.value;
+  }
+  get settled() {
+    return Math.abs(this.value - this.target) < 0.001 && Math.abs(this.velocity) < 0.001;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE LOADER
+   ═══════════════════════════════════════════════════════════ */
+const FILL_MS = 2200;
+const loaderEl = document.getElementById('loader');
+const fillEl = document.getElementById('loaderFill');
+const pctEl = document.getElementById('loaderPct');
+let loaderStart = performance.now();
+
+function updateLoader(now) {
+  const elapsed = now - loaderStart;
+  const progress = Math.min(elapsed / FILL_MS, 1);
+  const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+  const pct = Math.round(eased * 100);
+  fillEl.style.width = pct + '%';
+  pctEl.textContent = pct + '%';
+  if (progress < 1) {
+    requestAnimationFrame(updateLoader);
+  } else {
+    setTimeout(() => {
+      loaderEl.classList.add('exit');
+      setTimeout(() => { loaderEl.style.display = 'none'; triggerHeroEntrance(); }, 600);
+    }, 300);
+  }
+}
+requestAnimationFrame(updateLoader);
+
+/* ═══════════════════════════════════════════════════════════
+   CLOCK
+   ═══════════════════════════════════════════════════════════ */
+const clockEl = document.getElementById('clock');
+function updateClock() {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  clockEl.textContent = `${timeStr} IST`;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+/* ═══════════════════════════════════════════════════════════
+   HERO ENTRANCE REVEAL
+   ═══════════════════════════════════════════════════════════ */
+function triggerHeroEntrance() {
+  // Eyebrow
+  const eyebrow = document.querySelector('[data-reveal="eyebrow"]');
+  if (eyebrow) setTimeout(() => eyebrow.classList.add('revealed'), 100);
+
+  // H1 lines
+  document.querySelectorAll('[data-reveal="line"]').forEach(line => {
+    const delay = parseInt(line.dataset.delay || 0);
+    setTimeout(() => line.classList.add('revealed'), 200 + delay);
+  });
+
+  // Fade-in elements
+  document.querySelectorAll('[data-reveal="fade"]').forEach(el => {
+    const delay = parseInt(el.dataset.delay || 0);
+    setTimeout(() => el.classList.add('revealed'), 200 + delay);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ORANGE GLOW BLOBS (CURSOR-FOLLOWING)
+   ═══════════════════════════════════════════════════════════ */
+const heroCanvas = document.getElementById('heroCanvas');
+const ctx = heroCanvas.getContext('2d');
+const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+let heroW, heroH;
+let mouseX = -9999, mouseY = -9999;
+
+// Smooth cursor position (lerped)
+let cursorX = 0, cursorY = 0;
+
+// Ambient blobs that float around
+const blobs = [
+  { x: 0.55, y: 0.25, r: 320, ox: 0.02, oy: 0.015, phase: 0 },
+  { x: 0.70, y: 0.60, r: 260, ox: 0.015, oy: 0.02, phase: 2 },
+  { x: 0.35, y: 0.15, r: 200, ox: 0.018, oy: 0.012, phase: 4 },
+];
+
+function resizeHeroCanvas() {
+  const wrap = document.getElementById('heroCanvasWrap');
+  heroW = wrap.clientWidth;
+  heroH = wrap.clientHeight;
+  heroCanvas.width = heroW * dpr;
+  heroCanvas.height = heroH * dpr;
+  heroCanvas.style.width = heroW + 'px';
+  heroCanvas.style.height = heroH + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function drawBlob(cx, cy, rx, ry, color, alpha) {
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+  grad.addColorStop(0, color.replace('ALPHA', String(alpha)));
+  grad.addColorStop(0.5, color.replace('ALPHA', String(alpha * 0.5)));
+  grad.addColorStop(1, color.replace('ALPHA', '0'));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function renderGlow() {
+  ctx.clearRect(0, 0, heroW, heroH);
+
+  const t = performance.now() * 0.001;
+
+  // Draw ambient floating blobs
+  blobs.forEach(b => {
+    const bx = (b.x + Math.sin(t * b.ox + b.phase) * 0.08) * heroW;
+    const by = (b.y + Math.cos(t * b.oy + b.phase) * 0.06) * heroH;
+    drawBlob(bx, by, b.r * 1.4, b.r, 'rgba(207,128,71,ALPHA)', 0.18);
+  });
+
+  // Draw cursor-following glow
+  if (mouseX > -9000) {
+    // Smooth lerp toward cursor
+    cursorX += (mouseX - cursorX) * 0.08;
+    cursorY += (mouseY - cursorY) * 0.08;
+
+    // Main orange glow
+    drawBlob(cursorX, cursorY, 280, 200, 'rgba(239,159,39,ALPHA)', 0.45);
+    // Softer outer halo
+    drawBlob(cursorX, cursorY, 400, 300, 'rgba(207,128,71,ALPHA)', 0.15);
+    // Warm core
+    drawBlob(cursorX, cursorY, 140, 100, 'rgba(245,180,80,ALPHA)', 0.25);
+  }
+
+  requestAnimationFrame(renderGlow);
+}
+
+function initGlowCanvas() {
+  resizeHeroCanvas();
+
+  const heroSection = document.querySelector('.hero');
+  heroSection.addEventListener('mousemove', e => {
+    const rect = heroSection.getBoundingClientRect();
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
+  });
+  heroSection.addEventListener('mouseleave', () => { mouseX = -9999; mouseY = -9999; });
+
+  window.addEventListener('resize', resizeHeroCanvas);
+  renderGlow();
+}
+
+initGlowCanvas();
+
+/* ═══════════════════════════════════════════════════════════
+   HERO CARD CAROUSEL
+   ═══════════════════════════════════════════════════════════ */
+const heroCards = [
+  { caption: 'Detection Engine', title: 'EfficientNet-B4, fine-tuned.' },
+  { caption: 'Explainability', title: 'Grad-CAM shows the why.' },
+  { caption: 'Verification', title: 'SHA-256 signed results.' },
+];
+let cardIdx = 0;
+const captionEl = document.getElementById('heroCardCaption');
+const titleEl = document.getElementById('heroCardTitle');
+const dots = document.querySelectorAll('.hero-card__dot');
+
+function setCard(idx) {
+  cardIdx = ((idx % heroCards.length) + heroCards.length) % heroCards.length;
+  const card = heroCards[cardIdx];
+  captionEl.style.opacity = '0';
+  titleEl.style.opacity = '0';
+  setTimeout(() => {
+    captionEl.textContent = card.caption;
+    titleEl.textContent = card.title;
+    captionEl.style.opacity = '1';
+    titleEl.style.opacity = '1';
+  }, 200);
+  dots.forEach((d, i) => d.classList.toggle('active', i === cardIdx));
+}
+
+document.getElementById('heroCardPrev').addEventListener('click', () => setCard(cardIdx - 1));
+document.getElementById('heroCardNext').addEventListener('click', () => setCard(cardIdx + 1));
+dots.forEach(d => d.addEventListener('click', () => setCard(parseInt(d.dataset.dot))));
+
+// Auto-cycle
+setInterval(() => setCard(cardIdx + 1), 4000);
+
+/* ═══════════════════════════════════════════════════════════
+   ABOUT — WORD REVEAL
+   ═══════════════════════════════════════════════════════════ */
+const aboutText = 'We built a model that catches manipulation ';
+const aboutTextMuted = "across faces, frames, and formats — and we're upfront about where it still struggles.";
+const statementEl = document.getElementById('aboutStatement');
+
+function buildWordReveal() {
+  const allWords = aboutText.split(' ');
+  const mutedWords = aboutTextMuted.split(' ');
+
+  allWords.forEach((w, i) => {
+    const word = document.createElement('span');
+    word.className = 'word';
+    word.innerHTML = `<span>${w}</span>`;
+    word.style.transitionDelay = `${i * 0.04}s`;
+    statementEl.appendChild(word);
+  });
+
+  mutedWords.forEach((w, i) => {
+    const word = document.createElement('span');
+    word.className = 'word';
+    word.innerHTML = `<span class="muted">${w}</span>`;
+    word.style.transitionDelay = `${(allWords.length + i) * 0.04}s`;
+    statementEl.appendChild(word);
+  });
+}
+buildWordReveal();
+
+/* ═══════════════════════════════════════════════════════════
+   SCROLL-TRIGGERED ENTRANCES
+   ═══════════════════════════════════════════════════════════ */
+const entranceObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('revealed');
+      entranceObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.15, rootMargin: '0px 0px -50px 0px' });
+
+document.querySelectorAll('[data-entrance]').forEach(el => entranceObserver.observe(el));
+
+// Word reveal for about statement
+const wordObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      statementEl.querySelectorAll('.word').forEach(w => w.classList.add('revealed'));
+      wordObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.2 });
+wordObserver.observe(statementEl);
+
+/* ═══════════════════════════════════════════════════════════
+   STATS COUNT-UP
+   ═══════════════════════════════════════════════════════════ */
+const STAT_DURATION = 2000;
+
+function animateCount(el) {
+  const numEl = el.querySelector('.stat__number');
+  const target = parseFloat(el.dataset.target);
+  const suffix = el.dataset.suffix || '';
+  const prefix = el.dataset.prefix || '';
+  const decimals = parseInt(el.dataset.decimal || '0');
+  const start = performance.now();
+
+  function tick(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / STAT_DURATION, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = eased * target;
+
+    if (decimals > 0) {
+      numEl.textContent = prefix + current.toFixed(decimals) + suffix;
+    } else {
+      numEl.textContent = prefix + Math.round(current) + suffix;
+    }
+
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+const statsObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('revealed');
+      animateCount(entry.target);
+      statsObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.3 });
+
+document.querySelectorAll('[data-stat]').forEach(el => statsObserver.observe(el));
+
+/* ═══════════════════════════════════════════════════════════
+   NAV MENU
+   ═══════════════════════════════════════════════════════════ */
+const navMenu = document.getElementById('navMenu');
+const menuBtn = document.getElementById('menuBtn');
+const menuClose = document.getElementById('menuClose');
+
+function openMenu() {
+  navMenu.classList.add('open');
+  lenis.stop();
+}
+function closeMenu() {
+  navMenu.classList.remove('open');
+  lenis.start();
+}
+
+menuBtn.addEventListener('click', openMenu);
+menuClose.addEventListener('click', closeMenu);
+
+// Nav menu links
+navMenu.querySelectorAll('.nav-menu__link').forEach(link => {
+  link.addEventListener('click', (e) => {
+    if (link.dataset.action === 'open-modal') {
+      e.preventDefault();
+      closeMenu();
+      setTimeout(openModal, 400);
+      return;
+    }
+    const href = link.getAttribute('href');
+    if (href && href.startsWith('#')) {
+      e.preventDefault();
+      closeMenu();
+      setTimeout(() => scrollTo(href), 400);
+    }
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   REQUEST MODAL
+   ═══════════════════════════════════════════════════════════ */
+const modal = document.getElementById('requestModal');
+const requestForm = document.getElementById('requestForm');
+
+function openModal() {
+  modal.classList.add('open');
+  modal.classList.remove('success');
+  lenis.stop();
+}
+function closeModal() {
+  modal.classList.remove('open');
+  lenis.start();
+}
+
+// All open-modal triggers
+document.querySelectorAll('[data-action="open-modal"]').forEach(el => {
+  el.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeMenu();
+    setTimeout(openModal, navMenu.classList.contains('open') ? 400 : 0);
+  });
+});
+
+document.querySelectorAll('[data-action="close-modal"]').forEach(el => {
+  el.addEventListener('click', closeModal);
+});
+
+requestForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  modal.classList.add('success');
+});
+
+/* ═══════════════════════════════════════════════════════════
+   SMOOTH SCROLL FOR IN-PAGE LINKS
+   ═══════════════════════════════════════════════════════════ */
+document.querySelectorAll('a[href^="#"]').forEach(link => {
+  link.addEventListener('click', (e) => {
+    if (link.dataset.action) return; // handled elsewhere
+    const href = link.getAttribute('href');
+    if (href && href.length > 1) {
+      e.preventDefault();
+      scrollTo(href);
+    }
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   DEEPFAKE DETECTION WORKSPACE LOGIC
+   ═══════════════════════════════════════════════════════════ */
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const uploadDefault = document.getElementById('uploadDefault');
+const uploadPreviewWrap = document.getElementById('uploadPreviewWrap');
+const uploadPreviewImg = document.getElementById('uploadPreviewImg');
+const uploadPreviewName = document.getElementById('uploadPreviewName');
+const uploadPreviewSize = document.getElementById('uploadPreviewSize');
+const changeFileBtn = document.getElementById('changeFileBtn');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const demoResult = document.getElementById('demoResult');
+const resultBadge = document.getElementById('resultBadge');
+const resultConfidence = document.getElementById('resultConfidence');
+const gaugeFill = document.getElementById('gaugeFill');
+const inferenceTime = document.getElementById('inferenceTime');
+const demoWarning = document.getElementById('demoWarning');
+const warningText = document.getElementById('warningText');
+const heatmapSection = document.getElementById('heatmapSection');
+const heatmapImg = document.getElementById('heatmapImg');
+const demoError = document.getElementById('demoError');
+
+let selectedFile = null;
+
+// Trigger file open dialog
+uploadZone.addEventListener('click', (e) => {
+  if (e.target !== changeFileBtn && !changeFileBtn.contains(e.target)) {
+    fileInput.click();
+  }
+});
+
+// Drag and drop event listeners
+uploadZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  uploadZone.classList.add('dragging');
+});
+
+uploadZone.addEventListener('dragleave', () => {
+  uploadZone.classList.remove('dragging');
+});
+
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragging');
+  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    handleFileSelect(e.dataTransfer.files[0]);
+  }
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files && fileInput.files.length > 0) {
+    handleFileSelect(fileInput.files[0]);
+  }
+});
+
+changeFileBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  resetUploadZone();
+});
+
+function handleFileSelect(file) {
+  // Validate type
+  if (!file.type.match('image/jpeg') && !file.type.match('image/png') && !file.type.match('image/webp')) {
+    showError("Unsupported file type. Please upload a JPEG, PNG, or WEBP image.");
+    return;
+  }
+  // Validate size (5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    showError("File is too large. Maximum allowed size is 5MB.");
+    return;
+  }
+
+  selectedFile = file;
+  demoError.style.display = 'none';
+
+  // Show preview
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    uploadPreviewImg.src = e.target.result;
+    uploadPreviewName.textContent = file.name;
+    uploadPreviewSize.textContent = formatBytes(file.size);
+    
+    uploadDefault.style.display = 'none';
+    uploadPreviewWrap.style.display = 'flex';
+    uploadZone.classList.add('has-file');
+    analyzeBtn.disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+function resetUploadZone() {
+  selectedFile = null;
+  fileInput.value = '';
+  uploadPreviewImg.src = '';
+  uploadPreviewName.textContent = '';
+  uploadPreviewSize.textContent = '';
+  
+  uploadDefault.style.display = 'block';
+  uploadPreviewWrap.style.display = 'none';
+  uploadZone.classList.remove('has-file');
+  analyzeBtn.disabled = true;
+  analyzeBtn.classList.remove('demo__analyze-btn--loading');
+  analyzeBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Run Diagnostic Analysis
+  `;
+  demoResult.style.display = 'none';
+  demoError.style.display = 'none';
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function showError(msg) {
+  demoError.textContent = msg;
+  demoError.style.display = 'block';
+  demoResult.style.display = 'none';
+}
+
+// Click to run analysis
+analyzeBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+
+  analyzeBtn.disabled = true;
+  analyzeBtn.classList.add('demo__analyze-btn--loading');
+  analyzeBtn.innerHTML = 'Running AI Diagnostics...';
+  demoResult.style.display = 'none';
+  demoError.style.display = 'none';
+  demoWarning.style.display = 'none';
+  heatmapSection.style.display = 'none';
+
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+
+  const startTime = performance.now();
+
+  try {
+    const response = await fetch(`${API_BASE}/detect`, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer demo-token'
+      },
+      body: formData
+    });
+
+    const elapsed = Math.round(performance.now() - startTime);
+
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.detail || 'Analysis request failed');
+    }
+
+    const data = await response.json();
+    
+    // Fill result details
+    inferenceTime.textContent = `${elapsed}ms`;
+    resultConfidence.textContent = `Confidence: ${(data.confidence * 100).toFixed(2)}%`;
+    
+    // Set label and gauge styling
+    const isFake = data.label.toLowerCase() === 'fake';
+    resultBadge.textContent = data.label;
+    resultBadge.className = `demo__result-badge demo__result-badge--${isFake ? 'fake' : 'real'}`;
+    
+    gaugeFill.className = `demo__gauge-fill demo__gauge-fill--${isFake ? 'fake' : 'real'}`;
+    // Animate width
+    setTimeout(() => {
+      gaugeFill.style.width = `${(data.confidence * 100).toFixed(0)}%`;
+    }, 100);
+
+    // Show warnings if any
+    if (data.warning) {
+      warningText.textContent = data.warning;
+      demoWarning.style.display = 'flex';
+    } else {
+      demoWarning.style.display = 'none';
+    }
+
+    // Heatmap
+    if (data.heatmap) {
+      heatmapImg.src = `data:image/jpeg;base64,${data.heatmap}`;
+      heatmapSection.style.display = 'block';
+    } else {
+      heatmapSection.style.display = 'none';
+    }
+
+    // Display result panel
+    demoResult.style.display = 'block';
+    demoResult.classList.add('visible');
+
+  } catch (error) {
+    showError(`Error running classification: ${error.message}. Please check if the local server is running.`);
+  } finally {
+    analyzeBtn.disabled = false;
+    analyzeBtn.classList.remove('demo__analyze-btn--loading');
+    analyzeBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Run Diagnostic Analysis
+    `;
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   SHOWCASE CARDS — MAKE CLICKABLE
+   ═══════════════════════════════════════════════════════════ */
+document.querySelectorAll('.showcase-card').forEach((card, idx) => {
+  card.addEventListener('click', () => {
+    if (idx === 0 || idx === 1) {
+      // Image & Video demo cards → scroll to workspace
+      scrollTo('#demo');
+    } else {
+      // API / Dashboard cards → open request modal
+      openModal();
+    }
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   CAPABILITY ROWS — MAKE CLICKABLE
+   ═══════════════════════════════════════════════════════════ */
+document.querySelectorAll('.cap-row').forEach((row, idx) => {
+  row.addEventListener('click', () => {
+    if (idx === 0 || idx === 1 || idx === 2) {
+      // Image, Video, or Grad-CAM → scroll to demo workspace
+      scrollTo('#demo');
+    } else {
+      // API row → open modal
+      openModal();
+    }
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   HOVER DISABLE ON TOUCH
+   ═══════════════════════════════════════════════════════════ */
+if ('ontouchstart' in window) {
+  document.documentElement.classList.add('touch');
+}
+</script>
+
+</body>
+</html>

@@ -1,96 +1,98 @@
-# Deepfake Detection SaaS
+# VERITAS — AI-Powered Deepfake Detection Platform
 
-AI-powered deepfake detection platform featuring Grad-CAM explainability, face-crop ensembling, and a developer API. Built with Next.js, FastAPI, Supabase, and a custom fine-tuned EfficientNet-B4.
+VERITAS is an enterprise-grade digital forensics platform featuring real-time deepfake detection, face-masked Grad-CAM explainability heatmaps, face-crop ensembling, and developer API access.
 
----
-
-## System Architecture
-
-```
-┌──────────────────┐     ┌──────────────────────┐     ┌──────────────┐
-│   Next.js 16     │────▶│   FastAPI (Python)    │────▶│   Supabase   │
-│   Frontend       │     │   Backend             │     │   (Postgres  │
-│   localhost:3000  │     │   localhost:8000      │     │    + Auth)   │
-└──────────────────┘     └──────────┬───────────┘     └──────────────┘
-                                    │
-                          ┌─────────▼──────────┐
-                          │  EfficientNet-B4   │
-                          │  + Grad-CAM        │
-                          │  + FaceMesh        │
-                          └────────────────────┘
-```
+Built with **Next.js 16**, **FastAPI (Python 3.11)**, **PyTorch**, **MediaPipe**, **Supabase**, **Vercel**, and **Render**.
 
 ---
 
-## Core Features
+## 🌟 Key Highlights & Design
 
-- **Multi-Crop Inference**: Combines full face crops with 4 sub-regions and 8-variant Test-Time Augmentation (TTA).
+- **Landing Page**: Served at `/` via Next.js rewrites (`public/index-veritas.html`). Features off-white cinematic aesthetic, Lenis smooth scrolling, live **Indian Standard Time (IST)** clock, and dynamic warm-orange cursor-following ambient glow.
 - **Explainability**: Face-masked Grad-CAM heatmaps overlayed on facial landmarks (using MediaPipe FaceMesh).
-- **Developer API**: Key generation and revocation with SHA-256 hashed storage.
-- **Rate Limiting**: Daily limit of 5 scans per user, shared globally across Web UI and Developer API.
+- **Multi-Crop Inference**: Combines full face crops with 4 sub-regions and 8-variant Test-Time Augmentation (TTA).
+- **Developer API & Portal**: Supabase authentication (`/login`, `/signup`), protected dashboard (`/dashboard`), and SHA-256 hashed API key management.
 
 ---
 
-## Setup & Run
+## 🏗️ Architecture Overview
 
-### 1. Backend
+```
+┌───────────────────────────┐     ┌───────────────────────────┐     ┌───────────────────────────┐
+│     Next.js 16 (Vercel)   │────▶│   FastAPI Backend (Render)│────▶│   Supabase Postgres       │
+│     localhost:3000        │     │   localhost:8000          │     │   (Auth & Database)       │
+└───────────────────────────┘     └─────────────┬─────────────┘     └───────────────────────────┘
+                                                │
+                                      ┌─────────▼───────────┐
+                                      │  EfficientNet-B4    │
+                                      │  + Grad-CAM Overlay │
+                                      │  + FaceMesh Crop    │
+                                      └─────────────────────┘
+```
+
+---
+
+## ⚡ Quick Start (Local Development)
+
+### 1. Backend (FastAPI)
 ```bash
 cd backend
+# Create and activate virtual environment
 python -m venv venv
-source venv/bin/activate  # venv\Scripts\activate on Windows
+venv\Scripts\activate     # On Windows
+# Install dependencies
 pip install -r requirements.txt
-# Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env
-uvicorn app.main:app --reload
+# Start server
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### 2. Frontend
+### 2. Frontend (Next.js)
 ```bash
 cd frontend
+# Install node packages
 npm install
-# Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local
+# Run development server
 npm run dev
 ```
 
-### 3. Database
-Run the SQL migration scripts in `backend/scripts/` to create the required tables (`scans`, `api_keys`, `usage`).
+Visit **http://localhost:3000/** in your browser.
 
 ---
 
-## API Endpoints
+## 🚀 Deployment Guide
 
-| Method | Endpoint | Auth Header | Description |
-| :--- | :--- | :--- | :--- |
-| **POST** | `/detect` | `Authorization: Bearer <JWT>` | Image detection with Grad-CAM heatmap |
-| **POST** | `/detect-video` | `Authorization: Bearer <JWT>` | Video detection (12-frame sampling) |
-| **POST** | `/api/detect` | `X-API-Key: sk_...` | Developer API image detection |
-| **POST** | `/api-keys/generate` | `Authorization: Bearer <JWT>` | Generate a new developer API key |
+### Frontend Deployment (Vercel)
+1. Push project to GitHub.
+2. Import repository on [Vercel](https://vercel.com/new).
+3. Set **Root Directory** to `frontend`.
+4. Add environment variables:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+5. Click **Deploy**.
 
----
-
-## Model Performance & Generalization
-
-┌──────────────────────┬──────────┬──────────┬──────────────────────────────────────────┐
-│ Dataset              │ Accuracy │ AUC-ROC  │ Notes                                    │
-├──────────────────────┼──────────┼──────────┼──────────────────────────────────────────┤
-│ 🎯 In-distribution   │ 99.97%   │ 0.9998   │ StyleGAN fakes vs. Flickr (FFHQ) reals   │
-├──────────────────────┼──────────┼──────────┼──────────────────────────────────────────┤
-│ ⚠️ Celeb-DF v2 (OOD) │ 51.00%   │ 0.6352   │ Face-swap manipulation, unseen generator  │
-└──────────────────────┴──────────┴──────────┴──────────────────────────────────────────┘
-
-### Generalization & Out-of-Distribution (OOD) Analysis
-
-> [!WARNING]
-> **Generalization Caveat**: The model was trained exclusively on GAN-generated fakes (StyleGAN) and generalizes poorly to face-swap manipulation methods (Celeb-DF v2).
-
-This behavior is well-documented in deepfake detection literature: models trained on specific generative methods (e.g., GAN attribution) struggle to detect structural or blend boundaries typical of identity-swapping methods. Cross-manipulation generalization requires training on diverse datasets.
-
-- **Future Work**: Fine-tune the classifier on datasets like **FaceForensics++** (incorporating FaceSwap, Deepfakes, Face2Face, and NeuralTextures) to construct a more robust, generalizable detector.
+### Backend Deployment (Render)
+1. Import repository on [Render](https://render.com/).
+2. Select **Web Service** using `render.yaml` or Docker runtime.
+3. Set **Root Directory** to `backend`.
+4. Add environment variables:
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `FRONTEND_URL` (your Vercel app domain)
+5. Click **Deploy**.
 
 ---
 
-## Deployment (Docker)
-```bash
-cd backend
-docker build -t deepfake-api .
-docker run -p 8000:8000 -e SUPABASE_URL=... -e SUPABASE_SERVICE_ROLE_KEY=... deepfake-api
-```
+## 📊 Model Performance
+
+| Dataset | Accuracy | AUC-ROC | Notes |
+| :--- | :---: | :---: | :--- |
+| 🎯 **In-Distribution** | **99.97%** | **0.9998** | Fine-tuned EfficientNet-B4 on GAN fakes vs. FFHQ reals |
+| ⚠️ **Celeb-DF v2 (OOD)** | 51.00% | 0.6352 | Cross-manipulation generalization benchmark |
+
+---
+
+## 🔒 Security & License
+
+- API Keys are SHA-256 hashed before database insertion.
+- Auth protected routes (`/dashboard`) guarded via React AuthContext.
+- MIT License.

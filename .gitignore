@@ -41,8 +41,9 @@ diagnostic_gradcam_images/
 # Datasets
 archive/
 
-# Downloaded models (MediaPipe etc.)
-backend/models/
+# Downloaded models (MediaPipe etc.) — keep trained .pth tracked for deployment
+backend/models/*.tflite
+backend/models/*.task
 *.tflite
 *.task
 

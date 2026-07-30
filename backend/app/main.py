@@ -50,10 +50,15 @@ app = FastAPI(
     version="0.5.0",
 )
 
-# ── CORS (allow Next.js dev server) ─────────────────────────────────
+# ── CORS origins ─────────────────────────────────────────────────────
+_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+_deployed = os.getenv("FRONTEND_URL")
+if _deployed:
+    _origins.append(_deployed)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -157,6 +162,38 @@ async def detect_deepfake(
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
 
     token = authorization.split(" ", 1)[1]
+    
+    # Bypass auth for landing page demo
+    if token == "demo-token":
+        # ── Validate file type ───────────────────────────────────────────
+        if file.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type '{file.content_type}'. "
+                       f"Accepted types: {', '.join(sorted(ALLOWED_IMAGE_TYPES))}",
+            )
+
+        # ── Read and open the image ──────────────────────────────────────
+        try:
+            contents = await file.read()
+            image = Image.open(io.BytesIO(contents)).convert("RGB")
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="Could not open the uploaded file as an image.",
+            )
+
+        try:
+            result = _detect_single_image(image)
+            return result
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Model inference failed: {str(e)}",
+            )
+
     user = await get_user_from_token(token)
 
     if not user:
@@ -229,6 +266,101 @@ async def detect_video(
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
 
     token = authorization.split(" ", 1)[1]
+    
+    # Bypass auth for landing page demo
+    if token == "demo-token":
+        # ── Validate file type ───────────────────────────────────────────
+        if file.content_type not in ALLOWED_VIDEO_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported video type '{file.content_type}'. "
+                       f"Accepted types: {', '.join(sorted(ALLOWED_VIDEO_TYPES))}",
+            )
+
+        # ── Save to temp file for OpenCV ─────────────────────────────────
+        tmp_path = None
+        cap = None
+        try:
+            contents = await file.read()
+            tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
+            os.close(tmp_fd)
+            with open(tmp_path, "wb") as f:
+                f.write(contents)
+
+            # ── Open with OpenCV ─────────────────────────────────────────
+            cap = cv2.VideoCapture(tmp_path)
+            if not cap.isOpened():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid or corrupted video file",
+                )
+
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            if total_frames <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid or corrupted video file",
+                )
+
+            # ── Sample frames evenly ─────────────────────────────────────
+            step = max(total_frames // VIDEO_SAMPLE_FRAMES, 1)
+            sample_indices = list(range(0, total_frames, step))[:VIDEO_SAMPLE_FRAMES]
+
+            fake_count = 0
+            real_count = 0
+            frames_with_no_face = 0
+            confidences = []
+
+            for frame_idx in sample_indices:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                ret, frame = cap.read()
+                if not ret:
+                    continue
+
+                # Convert BGR to RGB PIL Image
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_image = Image.fromarray(frame_rgb)
+
+                # Run detection on this frame
+                result, face_found = _detect_frame_for_video(pil_image)
+
+                if not face_found:
+                    frames_with_no_face += 1
+                    continue
+
+                if result["label"] == "Fake":
+                    fake_count += 1
+                else:
+                    real_count += 1
+                confidences.append(result["confidence"])
+
+            total_checked = fake_count + real_count
+            if total_checked == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No face detected in any sampled frame",
+                )
+
+            fake_pct = round((fake_count / total_checked) * 100, 2)
+            avg_conf = round(sum(confidences) / len(confidences), 2) if confidences else 0.0
+            verdict = "Likely Fake" if fake_pct > 50 else "Likely Real"
+
+            return {
+                "fake_frame_percentage": fake_pct,
+                "total_frames_checked": total_checked,
+                "frames_with_no_face": frames_with_no_face,
+                "verdict": verdict,
+                "average_confidence": avg_conf,
+            }
+        finally:
+            if cap is not None:
+                cap.release()
+            if tmp_path is not None and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+
     user = await get_user_from_token(token)
 
     if not user:

@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 
 const AuthContext = createContext(null);
 
-const PUBLIC_ROUTES = ["/login", "/signup"];
+const PUBLIC_ROUTES = ["/", "/login", "/signup"];
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
