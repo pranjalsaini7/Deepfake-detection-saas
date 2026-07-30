@@ -1,15 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  async rewrites() {
-    return {
-      beforeFiles: [
-        {
-          source: '/',
-          destination: '/index-veritas.html',
-        },
-      ],
-    };
-  },
+  /* config options here */
 };
 
 export default nextConfig;
